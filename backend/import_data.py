@@ -3,12 +3,16 @@ import django
 import csv
 from datetime import datetime
 import uuid
+import sys
+
+# Add the project directory to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Set up Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'monkid.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'src.settings')
 django.setup()
 
-from monkid.app.models import Student, Teacher
+from src.app.models import Student, Teacher
 
 def import_students(csv_path):
     with open(csv_path, 'r', encoding='utf-8') as csvfile:
@@ -127,13 +131,24 @@ def import_teachers(csv_path):
             print(f"{'Created' if created else 'Updated'} teacher: {teacher}")
 
 def main():
-    # Adjust these paths to the absolute path of the sample_data directory
-    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'sample_data'))
+    # Use the correct path to the sample_data directory
+    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'sample_data'))
     student_csv_path = os.path.join(base_path, 'student_202505150207.csv')
     teacher_csv_path = os.path.join(base_path, 'teacher_202505150207.csv')
     
-    import_students(student_csv_path)
-    import_teachers(teacher_csv_path)
+    print(f"Looking for CSV files at: {base_path}")
+    print(f"Student CSV path: {student_csv_path}")
+    print(f"Teacher CSV path: {teacher_csv_path}")
+    
+    if os.path.exists(student_csv_path):
+        import_students(student_csv_path)
+    else:
+        print(f"Error: Student CSV file not found at {student_csv_path}")
+    
+    if os.path.exists(teacher_csv_path):
+        import_teachers(teacher_csv_path)
+    else:
+        print(f"Error: Teacher CSV file not found at {teacher_csv_path}")
 
 if __name__ == '__main__':
     main() 

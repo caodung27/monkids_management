@@ -24,9 +24,6 @@ class Student(models.Model):
     facility_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sequential_number = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    class Meta:
-        db_table = 'student'
-
     def __str__(self):
         return f"{self.name} ({self.student_id})"
 
@@ -53,9 +50,6 @@ class Teacher(models.Model):
     note = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=255)
-
-    class Meta:
-        db_table = 'teacher'
 
     def __str__(self):
         return f"{self.name} ({self.role})" 

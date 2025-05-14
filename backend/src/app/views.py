@@ -6,6 +6,9 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+import logging
+
+logger = logging.getLogger('src.app')
 
 class StudentViewSet(viewsets.ModelViewSet):
     """
@@ -43,18 +46,25 @@ class StudentViewSet(viewsets.ModelViewSet):
         responses={201: StudentSerializer}
     )    
     def create(self, request, *args, **kwargs):
-        print(f"Creating student with data: {request.data}")
+        logger.debug(f"Creating student with data: {request.data}")
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.error(f"Validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         student = self.perform_create(serializer)
-        print(f"Student created: {student} - ID: {serializer.instance.student_id}")
+        logger.debug(f"Student created: {student} - ID: {serializer.instance.student_id}")
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def perform_create(self, serializer):
-        instance = serializer.save()
-        print(f"Student saved to database with ID: {instance.student_id}")
-        return instance
+        try:
+            instance = serializer.save()
+            logger.debug(f"Student saved to database with ID: {instance.student_id}")
+            return instance
+        except Exception as e:
+            logger.error(f"Error creating student: {str(e)}")
+            raise e
     
     @swagger_auto_schema(
         operation_description="Update all fields of an existing student",
@@ -64,22 +74,33 @@ class StudentViewSet(viewsets.ModelViewSet):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
-        # Clean request data - remove student_id and sequential_number if present
+        # Process request data - make a copy to avoid modifying the original
         request_data = request.data.copy()
+        
+        # Remove immutable fields if present (these will be ignored by serializer anyway)
         if 'student_id' in request_data:
             del request_data['student_id']
         if 'sequential_number' in request_data:
             del request_data['sequential_number']
             
+        logger.debug(f"Updating student {instance.student_id} with data: {request_data}")
         serializer = self.get_serializer(instance, data=request_data, partial=partial)
-        serializer.is_valid(raise_exception=True)
+        
+        if not serializer.is_valid():
+            logger.error(f"Validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         self.perform_update(serializer)
         return Response(serializer.data)
     
     def perform_update(self, serializer):
-        instance = serializer.save()
-        print(f"Student updated in database with ID: {instance.student_id}")
-        return instance
+        try:
+            instance = serializer.save()
+            logger.debug(f"Student updated in database with ID: {instance.student_id}")
+            return instance
+        except Exception as e:
+            logger.error(f"Error updating student: {str(e)}")
+            raise e
     
     @swagger_auto_schema(
         operation_description="Update specific fields of an existing student",
