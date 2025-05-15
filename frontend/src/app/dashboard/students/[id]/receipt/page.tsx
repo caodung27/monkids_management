@@ -15,6 +15,7 @@ export default function StudentReceipt() {
   const [student, setStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState('');
+  const [nextMonthYear, setNextMonthYear] = useState('');
   const receiptRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
@@ -26,6 +27,14 @@ export default function StudentReceipt() {
     const date = new Date();
     const formattedDate = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
     setCurrentDate(formattedDate);
+
+    // Set next month and current year
+    const nextMonth = date.getMonth() + 2; // +2 because months are 0-indexed
+    const year = date.getFullYear();
+    // Handling December (11) + 1 = January (0) of next year
+    const displayMonth = nextMonth > 12 ? nextMonth - 12 : nextMonth;
+    const displayYear = nextMonth > 12 ? year + 1 : year;
+    setNextMonthYear(`Tháng ${displayMonth} Năm ${displayYear}`);
 
     // Fetch student data
     const fetchStudent = async () => {
@@ -128,8 +137,8 @@ export default function StudentReceipt() {
           </Grid.Col>
         </Grid>
 
-        <Text ta="center" fw={700} size="xs" mt="sm" mb="md">BIÊN LAI THU TIỀN</Text>
-        <Text ta="center" size="xs" mb="lg">Tháng 5 Năm 2025</Text>
+        <Text ta="center" fw={700} size="md" mt="sm" mb="md">BIÊN LAI THU TIỀN</Text>
+        <Text ta="center" size="xs" mb="lg">{nextMonthYear}</Text>
 
         <Table mb="md"fz="xs">
           <Table.Tbody>
@@ -205,7 +214,7 @@ export default function StudentReceipt() {
           </Table.Tbody>
         </Table>
 
-        <Text ta="right" mt="lg" fz="xs">Vĩnh Yên, ngày.....tháng.....năm......</Text>
+        <Text ta="right" mt="lg" fz="xs">Vĩnh Yên, ngày ... tháng ... năm ...</Text>
         <div className="qr-code-container" style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
           <img
             src="/qr.png"

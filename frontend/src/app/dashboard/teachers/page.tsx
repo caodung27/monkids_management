@@ -110,7 +110,7 @@ export default function TeachersPage() {
                     const color =
                     role === 'Quản lý' ? 'blue' :
                     role === 'GV' ? 'green' :
-                    role === 'Bảo mẫu' ? 'orange' :
+                    role === 'Đầu bếp' ? 'orange' :
                     'gray';
 
                     return (

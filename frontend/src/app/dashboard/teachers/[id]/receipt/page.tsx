@@ -1,24 +1,58 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Container, Paper, Title, Text, Divider, Table, Button, Grid, Group } from '@mantine/core';
+import { Container, Paper, Title, Text, Table, Button, Grid, Group, Box } from '@mantine/core';
 import { useParams } from 'next/navigation';
-import { IconPrinter } from '@tabler/icons-react';
+import { IconPrinter, IconArrowLeft } from '@tabler/icons-react';
 import { useReactToPrint } from 'react-to-print';
-import { Teacher } from '@/types';
 import { formatVND } from '@/utils/formatters';
+import { notifications } from '@mantine/notifications';
+import Link from 'next/link';
+import { useTeacher } from '@/api/hooks/useTeachers';
 
-export default function TeacherSalary() {
+// Add print-specific styling
+const printStyles = `
+  @media print {
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+    body {
+      font-size: 12px !important;
+    }
+    .printable-receipt {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+    .no-print {
+      display: none !important;
+    }
+    table {
+      font-size: 10px !important;
+    }
+    td, th {
+      padding: 4px 8px !important;
+    }
+  }
+`;
+
+export default function TeacherReceipt() {
   const params = useParams();
   const teacherId = params.id as string;
-  const [teacher, setTeacher] = useState<Teacher | null>(null);
-  const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState('');
+  const [nextMonthYear, setNextMonthYear] = useState('');
   const receiptRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
   });
+
+  // Use the custom hook to fetch teacher data
+  const { data: teacher, isLoading, error } = useTeacher(teacherId);
 
   useEffect(() => {
     // Set current date for receipt
@@ -26,24 +60,16 @@ export default function TeacherSalary() {
     const formattedDate = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
     setCurrentDate(formattedDate);
 
-    // Fetch teacher data
-    const fetchTeacher = async () => {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teachers/${teacherId}/`);
-        if (!response.ok) throw new Error('Failed to fetch');
-        const data = await response.json();
-        setTeacher(data);
-      } catch (error) {
-        console.error('Error fetching teacher:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Set next month and current year
+    const nextMonth = date.getMonth() + 2; // +2 because months are 0-indexed
+    const year = date.getFullYear();
+    // Handling December (11) + 1 = January (0) of next year
+    const displayMonth = nextMonth > 12 ? nextMonth - 12 : nextMonth;
+    const displayYear = nextMonth > 12 ? year + 1 : year;
+    setNextMonthYear(`Tháng ${displayMonth} Năm ${displayYear}`);
+  }, []);
 
-    fetchTeacher();
-  }, [teacherId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Container size="lg" mt="md">
         <Text>Đang tải...</Text>
@@ -51,157 +77,171 @@ export default function TeacherSalary() {
     );
   }
 
-  if (!teacher) {
+  if (error || !teacher) {
     return (
       <Container size="lg" mt="md">
-        <Text>Không tìm thấy thông tin giáo viên</Text>
+        <Group>
+          <Link href="/dashboard/teachers" style={{ textDecoration: 'none' }}>
+            <Button variant="subtle" leftSection={<IconArrowLeft size={16} />}>
+              Quay lại
+            </Button>
+          </Link>
+          <Text>Không tìm thấy thông tin giáo viên</Text>
+        </Group>
       </Container>
     );
   }
 
   return (
     <Container size="lg" mt="md">
-      <Group justify="space-between" mb="md">
-        <Title order={2}>Phiếu lương giáo viên</Title>
+      <style>{printStyles}</style>
+      <Group justify="space-between" mb="md" className="no-print">
+        <Group>
+          <Link href="/dashboard/teachers" style={{ textDecoration: 'none' }}>
+            <Button variant="subtle" leftSection={<IconArrowLeft size={16} />}>
+              Quay lại
+            </Button>
+          </Link>
+          <Title order={2}>Phiếu lương giáo viên</Title>
+        </Group>
         <Button 
           leftSection={<IconPrinter size={16} />}
           onClick={handlePrint}
-          className="no-print"
         >
           In phiếu lương
         </Button>
       </Group>
 
-      <Paper ref={receiptRef} p="lg" withBorder className="printable-receipt">
-        <Grid>
-          <Grid.Col span={8}>
-            <Text ta="center" fw={700} size="lg">MẦM NON MONKIDS</Text>
+      <Paper ref={receiptRef} p="sm" withBorder className="printable-receipt" style={{ maxWidth: "210mm" }}>
+        <Grid justify="space-between" align="center" gutter="xs" mb={5}>
+          <Grid.Col span={6}>
+            <Text fw={700} size="sm">MẦM NON MONKIDS</Text>
           </Grid.Col>
-          <Grid.Col span={4}>
-            <Text ta="right" fw={700} size="lg">SỐ: 1</Text>
+          <Grid.Col span={6} style={{ textAlign: 'right' }}>
+            <Text fw={700} size="sm">SỐ: </Text>
           </Grid.Col>
         </Grid>
 
-        <Text ta="center" fw={700} size="xl" mt="md" mb="lg">PHIẾU LƯƠNG GIÁO VIÊN</Text>
-        <Text ta="center" mb="xl">Tháng 4 Năm 2025</Text>
+        <Text ta="center" fw={700} size="md" mb={5}>PHIẾU LƯƠNG GIÁO VIÊN</Text>
+        <Text ta="center" size="sm" mb={10}>{nextMonthYear}</Text>
 
-        <Table mb="lg">
+        <Table mb={10} withTableBorder withColumnBorders style={{ fontSize: 'sm' }}>
           <Table.Tbody>
             <Table.Tr>
-              <Table.Td><Text fw={500}>Họ tên:</Text></Table.Td>
-              <Table.Td>{teacher.name}</Table.Td>
+              <Table.Td style={{ width: '15%', padding: '3px 8px' }}><Text fw={500}>Họ tên:</Text></Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.name}</Table.Td>
+              <Table.Td style={{ width: '15%', padding: '3px 8px' }}><Text fw={500}>Chức vụ:</Text></Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.role}</Table.Td>
             </Table.Tr>
             <Table.Tr>
-              <Table.Td><Text fw={500}>Chức vụ:</Text></Table.Td>
-              <Table.Td>{teacher.role}</Table.Td>
-            </Table.Tr>
-            <Table.Tr>
-              <Table.Td><Text fw={500}>SĐT:</Text></Table.Td>
-              <Table.Td>{teacher.phone || 'Chưa cập nhật'}</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}><Text fw={500}>SĐT:</Text></Table.Td>
+              <Table.Td colSpan={3} style={{ padding: '3px 8px' }}>{teacher.phone}</Table.Td>
             </Table.Tr>
           </Table.Tbody>
         </Table>
 
-        <Table>
+        <Table withTableBorder withColumnBorders style={{ fontSize: 'sm' }}>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Nội dung</Table.Th>
-              <Table.Th>Chi tiết</Table.Th>
-              <Table.Th>Thành tiền</Table.Th>
+              <Table.Th style={{ padding: '3px 8px', width: '25%' }}>Nội dung</Table.Th>
+              <Table.Th style={{ padding: '3px 8px', width: '50%' }}>Chi tiết</Table.Th>
+              <Table.Th style={{ padding: '3px 8px', width: '25%' }}>Thành tiền</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             <Table.Tr>
-              <Table.Td rowSpan={4}>Mức lương cơ bản</Table.Td>
-              <Table.Td>Lương cơ bản</Table.Td>
-              <Table.Td>{formatVND(teacher.base_salary)}</Table.Td>
+              <Table.Td rowSpan={4} style={{ padding: '3px 8px' }}>Mức lương cơ bản</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Lương cơ bản</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.base_salary)}</Table.Td>
             </Table.Tr>
             <Table.Tr>
-              <Table.Td>Số ngày dạy</Table.Td>
-              <Table.Td>{teacher.teaching_days}</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Số ngày dạy</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.teaching_days}</Table.Td>
             </Table.Tr>
             <Table.Tr>
-              <Table.Td>Số ngày nghỉ</Table.Td>
-              <Table.Td>{teacher.absence_days}</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Số ngày nghỉ</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.absence_days}</Table.Td>
             </Table.Tr>
             <Table.Tr>
-              <Table.Td>Lương nhận được</Table.Td>
-              <Table.Td>{formatVND(teacher.received_salary)}</Table.Td>
-            </Table.Tr>
-            
-            <Table.Tr>
-              <Table.Td rowSpan={2}>Mức lương dạy thêm</Table.Td>
-              <Table.Td>Số ngày dạy thêm</Table.Td>
-              <Table.Td>{teacher.extra_teaching_days}</Table.Td>
-            </Table.Tr>
-            <Table.Tr>
-              <Table.Td>Lương dạy thêm</Table.Td>
-              <Table.Td>{formatVND(teacher.extra_salary)}</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Lương nhận được</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.received_salary)}</Table.Td>
             </Table.Tr>
             
             <Table.Tr>
-              <Table.Td rowSpan={3}>Phụ cấp</Table.Td>
-              <Table.Td>Hỗ trợ bảo hiểm</Table.Td>
-              <Table.Td>{formatVND(teacher.insurance_support)}</Table.Td>
+              <Table.Td rowSpan={2} style={{ padding: '3px 8px' }}>Mức lương dạy thêm</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Số ngày dạy thêm</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.extra_teaching_days}</Table.Td>
             </Table.Tr>
             <Table.Tr>
-              <Table.Td>Hỗ trợ trách nhiệm</Table.Td>
-              <Table.Td>{formatVND(teacher.responsibility_support)}</Table.Td>
-            </Table.Tr>
-            <Table.Tr>
-              <Table.Td>Hỗ trợ xăng xe</Table.Td>
-              <Table.Td>{formatVND(teacher.breakfast_support)}</Table.Td>
-            </Table.Tr>
-          
-            <Table.Tr>
-              <Table.Td rowSpan={2}>Dạy KNS</Table.Td>
-              <Table.Td>Số buổi dạy</Table.Td>
-              <Table.Td>{teacher.skill_sessions}</Table.Td>
-            </Table.Tr>
-            <Table.Tr>
-              <Table.Td>Tiền dạy</Table.Td>
-              <Table.Td>{formatVND(teacher.skill_salary)}</Table.Td>
-            </Table.Tr>
-          
-            <Table.Tr>
-              <Table.Td rowSpan={2}>Dạy TA</Table.Td>
-              <Table.Td>Số buổi dạy</Table.Td>
-              <Table.Td>{teacher.english_sessions}</Table.Td>
-            </Table.Tr>
-            <Table.Tr>
-              <Table.Td>Tiền dạy</Table.Td>
-              <Table.Td>{formatVND(teacher.english_salary)}</Table.Td>
-            </Table.Tr>
-          
-            <Table.Tr>
-              <Table.Td>Thưởng HS đi môi</Table.Td>
-              <Table.Td></Table.Td>
-              <Table.Td>{formatVND(teacher.new_students_list)}</Table.Td>
-            </Table.Tr>
-          
-            <Table.Tr>
-              <Table.Td>Đã ứng</Table.Td>
-              <Table.Td></Table.Td>
-              <Table.Td>{formatVND(teacher.paid_amount)}</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Lương dạy thêm</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.extra_salary)}</Table.Td>
             </Table.Tr>
             
             <Table.Tr>
-              <Table.Td colSpan={2} fw={700}>Tổng lương</Table.Td>
-              <Table.Td fw={700}>{formatVND(teacher.total_salary)}</Table.Td>
+              <Table.Td rowSpan={3} style={{ padding: '3px 8px' }}>Phụ cấp</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Hỗ trợ bảo hiểm</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.insurance_support)}</Table.Td>
+            </Table.Tr>
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }}>Hỗ trợ trách nhiệm</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.responsibility_support)}</Table.Td>
+            </Table.Tr>
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }}>Hỗ trợ xăng xe</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.breakfast_support)}</Table.Td>
+            </Table.Tr>
+          
+            <Table.Tr>
+              <Table.Td rowSpan={2} style={{ padding: '3px 8px' }}>Dạy KNS</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Số buổi dạy</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.skill_sessions}</Table.Td>
+            </Table.Tr>
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }}>Tiền dạy</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.skill_salary)}</Table.Td>
+            </Table.Tr>
+          
+            <Table.Tr>
+              <Table.Td rowSpan={2} style={{ padding: '3px 8px' }}>Dạy TA</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>Số buổi dạy</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{teacher.english_sessions}</Table.Td>
+            </Table.Tr>
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }}>Tiền dạy</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.english_salary)}</Table.Td>
+            </Table.Tr>
+          
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }}>Thưởng HS đi môi</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}></Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.new_students_list)}</Table.Td>
+            </Table.Tr>
+          
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }}>Đã ứng</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}></Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }}>{formatVND(teacher.paid_amount)}</Table.Td>
+            </Table.Tr>
+            
+            <Table.Tr>
+              <Table.Td colSpan={2} fw={700} style={{ padding: '3px 8px' }}>Tổng lương</Table.Td>
+              <Table.Td fw={700} style={{ padding: '3px 8px' }}>{formatVND(teacher.total_salary)}</Table.Td>
             </Table.Tr>
             
             {teacher.note && (
               <Table.Tr>
-                <Table.Td>Ghi chú</Table.Td>
-                <Table.Td colSpan={2}>{teacher.note}</Table.Td>
+                <Table.Td style={{ padding: '3px 8px' }}>Ghi chú</Table.Td>
+                <Table.Td colSpan={2} style={{ padding: '3px 8px' }}>{teacher.note}</Table.Td>
               </Table.Tr>
             )}
           </Table.Tbody>
         </Table>
 
-        <Text ta="right" mt="xl">Vĩnh Yên, ngày.....tháng.....năm......</Text>
-        <Text ta="center" size="sm" mt="xl">GV có 25 ngày công vào tháng 03/2025.</Text>
-        <Text ta="center" size="sm">Nếu dạy nhiều hơn 25 ngày công sẽ được tính 150.000 / 1 ngày dạy thêm.</Text>
+        <Box mt={10}>
+          <Text ta="right" size="xs">Vĩnh Yên, ngày ... tháng ... năm ...</Text>
+          <Text ta="center" size="xs" mt={5}>GV có 25 ngày công vào tháng 03/2025.</Text>
+          <Text ta="center" size="xs">Nếu dạy nhiều hơn 25 ngày công sẽ được tính 150.000 / 1 ngày dạy thêm.</Text>
+        </Box>
       </Paper>
     </Container>
   );

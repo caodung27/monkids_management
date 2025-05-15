@@ -11,6 +11,7 @@ import { notifications } from '@mantine/notifications';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { MEAL_FEE_PER_TICKET } from '@/constants/fees';
 import 'react-day-picker/dist/style.css';
 
 // StudentEditFormValues now directly uses Student fields, assuming form handles types
@@ -84,21 +85,29 @@ export default function EditStudentPage() {
     const calculatedFinalFee = Math.round(base_fee * (1 - (discount_percentage || 0))); 
     
     // Calculate meal fee and round to whole number
-    const calculatedMealFee = Math.round((pm - pt) * 30000);
+    const calculatedMealFee = Math.round((pm - pt) * MEAL_FEE_PER_TICKET);
     
     // Calculate total fee and round to whole number
+    // Ensure all values are valid numbers or default to 0
+    const safeUtilities = Number(utilities_fee) || 0;
+    const safeEngFee = Number(eng_fee) || 0;
+    const safeSkillFee = Number(skill_fee) || 0;
+    const safeStudentFund = Number(student_fund) || 0;
+    const safeFacilityFee = Number(facility_fee) || 0;
+    
     const calculatedTotalFee = Math.round(
       calculatedFinalFee + 
-      utilities_fee + 
+      safeUtilities + 
       calculatedMealFee + 
-      eng_fee + 
-      skill_fee + 
-      student_fund + 
-      facility_fee
+      safeEngFee + 
+      safeSkillFee + 
+      safeStudentFund + 
+      safeFacilityFee
     );
     
     // Calculate remaining amount and round to whole number
-    const calculatedRemainingAmount = Math.round(calculatedTotalFee - paid_amount);
+    const safePaidAmount = Number(paid_amount) || 0;
+    const calculatedRemainingAmount = Math.round(calculatedTotalFee - safePaidAmount);
 
     // Use a single setValues to avoid multiple re-renders if possible,
     // or setFieldValue if only these specific fields are changing due to calculation
@@ -124,21 +133,22 @@ export default function EditStudentPage() {
         name: values.name,
         classroom: values.classroom,
         birthdate: values.birthdate ? values.birthdate.toISOString().split('T')[0] : null,
-        base_fee: String(values.base_fee),
-        // discount_percentage in form.values is already 0.0-1.0, matches API payload type
-        discount_percentage: values.discount_percentage, 
-        final_fee: String(values.final_fee),
-        utilities_fee: String(values.utilities_fee),
-        pt: String(values.pt),
-        pm: String(values.pm),
-        meal_fee: String(values.meal_fee),
-        eng_fee: String(values.eng_fee),
-        skill_fee: String(values.skill_fee),
-        student_fund: String(values.student_fund),
-        facility_fee: String(values.facility_fee),
-        paid_amount: String(values.paid_amount),
-        total_fee: String(values.total_fee),
-        remaining_amount: String(values.remaining_amount),
+        base_fee: String(values.base_fee || 0),
+        // Keep discount_percentage as a number for API
+        // Ensure it's a valid number
+        discount_percentage: Number(values.discount_percentage) || 0,
+        final_fee: String(values.final_fee || 0),
+        utilities_fee: String(values.utilities_fee || 0),
+        pt: String(values.pt || 0),
+        pm: String(values.pm || 0),
+        meal_fee: String(values.meal_fee || 0),
+        eng_fee: String(values.eng_fee || 0),
+        skill_fee: String(values.skill_fee || 0),
+        student_fund: String(values.student_fund || 0),
+        facility_fee: String(values.facility_fee || 0),
+        paid_amount: String(values.paid_amount || 0),
+        total_fee: String(values.total_fee || 0),
+        remaining_amount: String(values.remaining_amount || 0),
       };
       await studentApi.updateStudent(studentSequentialNumberRef.current, apiPayload);
       notifications.show({
@@ -305,7 +315,7 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Giảm học phí (%)"
                 placeholder="Nhập % giảm học phí"
-                value={form.values.discount_percentage * 100}
+                value={Math.round(form.values.discount_percentage * 100)}
                 onChange={(val) => form.setFieldValue('discount_percentage', (val === '' ? 0 : Number(val)) / 100)}
                 suffix=" %"
                 decimalScale={0}

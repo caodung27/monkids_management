@@ -12,6 +12,7 @@ import { notifications } from '@mantine/notifications';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { MEAL_FEE_PER_TICKET } from '@/constants/fees';
 import 'react-day-picker/dist/style.css';
 
 export default function NewStudentPage() {
@@ -53,22 +54,31 @@ export default function NewStudentPage() {
       // Calculate final fee after discount and round to whole number
       const finalFee = Math.round(baseFee * (1 - discountPercentage));
       
-      // Calculate meal fee: (pm - pt) * 30000
-      const mealFee = Math.round((pmValue - ptValue) * 30000);
+      // Calculate meal fee: (pm - pt) * MEAL_FEE_PER_TICKET
+      const mealFee = Math.round((pmValue - ptValue) * MEAL_FEE_PER_TICKET);
       
       // Calculate total fee: sum of all fees
+      // Further ensure all values are valid before calculation
+      const safeUtilitiesFee = Number(utilitiesFee) || 0;
+      const safeMealFee = Number(mealFee) || 0;
+      const safeEngFee = Number(engFee) || 0;
+      const safeSkillFee = Number(skillFee) || 0;
+      const safeStudentFund = Number(studentFund) || 0;
+      const safeFacilityFee = Number(facilityFee) || 0;
+      
       const totalFee = Math.round(
         finalFee + 
-        utilitiesFee + 
-        mealFee + 
-        engFee + 
-        skillFee + 
-        studentFund + 
-        facilityFee
+        safeUtilitiesFee + 
+        safeMealFee + 
+        safeEngFee + 
+        safeSkillFee + 
+        safeStudentFund + 
+        safeFacilityFee
       );
                       
       // Calculate remaining amount
-      const remainingAmount = Math.round(totalFee - paidAmount);
+      const safePaidAmount = Number(paidAmount) || 0;
+      const remainingAmount = Math.round(totalFee - safePaidAmount);
 
       // Check if calculated values have changed before setting them to prevent infinite loops
       if (
@@ -109,8 +119,25 @@ export default function NewStudentPage() {
   const handleSubmit = async (formValues: Omit<Student, 'student_id' | 'sequential_number'> & { birthdate: Date | null }) => {
     try {
       const apiPayload = {
-        ...formValues,
+        name: formValues.name,
+        classroom: formValues.classroom,
         birthdate: formValues.birthdate ? formValues.birthdate.toISOString().split('T')[0] : null,
+        // Format numeric fields as strings for API
+        base_fee: String(formValues.base_fee || 0),
+        // Keep discount_percentage as a number for API
+        discount_percentage: Number(formValues.discount_percentage) || 0,
+        final_fee: String(formValues.final_fee || 0),
+        utilities_fee: String(formValues.utilities_fee || 0),
+        pt: String(formValues.pt || 0),
+        pm: String(formValues.pm || 0),
+        meal_fee: String(formValues.meal_fee || 0),
+        eng_fee: String(formValues.eng_fee || 0),
+        skill_fee: String(formValues.skill_fee || 0),
+        student_fund: String(formValues.student_fund || 0),
+        facility_fee: String(formValues.facility_fee || 0),
+        total_fee: String(formValues.total_fee || 0),
+        paid_amount: String(formValues.paid_amount || 0),
+        remaining_amount: String(formValues.remaining_amount || 0),
       };
       await studentApi.createStudent(apiPayload);
       notifications.show({
@@ -259,7 +286,7 @@ export default function NewStudentPage() {
                 min={0}
                 max={100}
                 onKeyDown={handleKeyDown}
-                value={(form.values.discount_percentage || 0) * 100}
+                value={Math.round((form.values.discount_percentage || 0) * 100)}
                 onChange={(value) => {
                   const numValue = Number(value) || 0;
                   form.setFieldValue('discount_percentage', numValue / 100);
