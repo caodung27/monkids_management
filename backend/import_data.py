@@ -141,12 +141,12 @@ def main():
     print(f"Teacher CSV path: {teacher_csv_path}")
     
     if os.path.exists(student_csv_path):
-        import_students(student_csv_path)
+    import_students(student_csv_path)
     else:
         print(f"Error: Student CSV file not found at {student_csv_path}")
     
     if os.path.exists(teacher_csv_path):
-        import_teachers(teacher_csv_path)
+    import_teachers(teacher_csv_path)
     else:
         print(f"Error: Teacher CSV file not found at {teacher_csv_path}")
 
