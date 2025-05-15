@@ -33,11 +33,47 @@ a {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  
   body {
-    background-color: white;
+    font-size: 12px !important;
+  }
+  
+  .printable-receipt {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
   }
   
   .no-print {
-    display: none;
+    display: none !important;
+  }
+  
+  /* Hide all other elements when printing */
+  body > *:not(.printable-receipt) {
+    display: none !important;
+  }
+  
+  /* Table styles for printing */
+  table {
+    font-size: 10px !important;
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  
+  td, th {
+    padding: 4px 8px !important;
+    border: 1px solid #ddd !important;
+  }
+  
+  /* Ensure page breaks don't happen inside tables */
+  table {
+    page-break-inside: avoid;
   }
 } 

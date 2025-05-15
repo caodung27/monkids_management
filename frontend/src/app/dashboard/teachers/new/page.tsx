@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -56,11 +56,20 @@ export default function NewTeacherPage() {
     const calculated_skill_salary = skill_sessions * 125000;
     const calculated_english_salary = english_sessions * 150000;
 
+    // Get support values
+    const insurance_support = Number(form.values.insurance_support) || 0;
+    const responsibility_support = Number(form.values.responsibility_support) || 0;
+    const breakfast_support = Number(form.values.breakfast_support) || 0;
+    
+    // Calculate total salary with all components
     const calculated_total_salary =
       calculated_received_salary +
       calculated_extra_salary +
       calculated_skill_salary +
       calculated_english_salary +
+      insurance_support +
+      responsibility_support +
+      breakfast_support +
       new_students_list -
       paid_amount;
 
@@ -101,6 +110,9 @@ export default function NewTeacherPage() {
     form.values.skill_salary,
     form.values.english_salary,
     form.values.total_salary,
+    form.values.insurance_support,
+    form.values.responsibility_support,
+    form.values.breakfast_support,
   ]);
 
   const handleSubmit = async (values: Teacher) => {
@@ -146,6 +158,19 @@ export default function NewTeacherPage() {
     }
   };
 
+  // Prevent form submission when pressing enter in input fields
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLFormElement | HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  };
+
+  // Custom submit handler to ensure form is only submitted with button click
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    form.onSubmit(handleSubmit)(e);
+  };
+
   return (
     <Container size="lg" mt="md">
       <Group mb="xl">
@@ -160,13 +185,14 @@ export default function NewTeacherPage() {
       </Group>
 
       <Paper withBorder p="md" radius="md">
-        <form onSubmit={form.onSubmit(handleSubmit)}>
+        <form onSubmit={handleFormSubmit} onKeyDown={handleKeyDown}>
           <Grid>
             <Grid.Col span={{ base: 12, md: 6 }}>
               <TextInput
                 label="Tên giáo viên"
                 placeholder="Nhập tên giáo viên"
                 required
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('name')}
               />
             </Grid.Col>
@@ -179,8 +205,9 @@ export default function NewTeacherPage() {
                   { value: 'GV', label: 'Giáo viên' },
                   { value: 'Quản lý', label: 'Quản lý' },
                   { value: 'Quản lý + GV', label: 'Quản lý + Giáo viên' },
-                  { value: 'Bảo mẫu', label: 'Bảo mẫu' },
+                  { value: 'Đầu bếp', label: 'Đầu bếp' },
                 ]}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('role')}
               />
             </Grid.Col>
@@ -188,6 +215,7 @@ export default function NewTeacherPage() {
               <TextInput
                 label="Số điện thoại"
                 placeholder="Nhập số điện thoại"
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('phone')}
               />
             </Grid.Col>
@@ -202,6 +230,7 @@ export default function NewTeacherPage() {
                 placeholder="Nhập lương cơ bản"
                 suffix=" ₫"
                 thousandSeparator=","
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('base_salary')}
               />
             </Grid.Col>
@@ -211,6 +240,7 @@ export default function NewTeacherPage() {
                 placeholder="Nhập số ngày dạy"
                 min={0}
                 max={31}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('teaching_days')}
               />
             </Grid.Col>
@@ -220,6 +250,7 @@ export default function NewTeacherPage() {
                 placeholder="Nhập số ngày vắng"
                 min={0}
                 max={31}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('absence_days')}
               />
             </Grid.Col>
@@ -231,6 +262,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 readOnly
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('received_salary')}
               />
             </Grid.Col>
@@ -244,6 +276,7 @@ export default function NewTeacherPage() {
                 label="Số ngày dạy thêm"
                 placeholder="Nhập số ngày dạy thêm"
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_teaching_days')}
               />
             </Grid.Col>
@@ -255,6 +288,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 readOnly
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_salary')}
               />
             </Grid.Col>
@@ -265,6 +299,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('insurance_support')}
               />
             </Grid.Col>
@@ -275,6 +310,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('responsibility_support')}
               />
             </Grid.Col>
@@ -285,6 +321,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('breakfast_support')}
               />
             </Grid.Col>
@@ -298,6 +335,7 @@ export default function NewTeacherPage() {
                 label="Số buổi dạy KNS"
                 placeholder="Nhập số buổi KNS"
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_sessions')}
               />
             </Grid.Col>
@@ -309,6 +347,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 readOnly
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_salary')}
               />
             </Grid.Col>
@@ -317,6 +356,7 @@ export default function NewTeacherPage() {
                 label="Số buổi dạy Tiếng Anh"
                 placeholder="Nhập số buổi TA"
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_sessions')}
               />
             </Grid.Col>
@@ -328,6 +368,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 readOnly
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_salary')}
               />
             </Grid.Col>
@@ -343,16 +384,18 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('paid_amount')}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
               <NumberInput
                 label="Thưởng học sinh mới"
-                placeholder="Nhập thưởng HS mới (200.000đ/HS)"
+                placeholder="Nhập thưởng HS mới (100.000đ/HS)"
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('new_students_list')}
               />
             </Grid.Col>
@@ -367,6 +410,7 @@ export default function NewTeacherPage() {
                 size="lg"
                 styles={{ input: { textAlign: 'right', fontWeight: 'bold' } }}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('total_salary')}
               />
             </Grid.Col>
@@ -382,6 +426,7 @@ export default function NewTeacherPage() {
                 autosize
                 minRows={3}
                 maxRows={6}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('note')}
               />
             </Grid.Col>

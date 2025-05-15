@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -104,12 +104,20 @@ export default function EditTeacherPage() {
       final_english_salary = english_sessions_val * 150000;
     }
 
+    // Add insurance and other supports to calculation
+    const insurance_support = Number(form.values.insurance_support) || 0;
+    const responsibility_support = Number(form.values.responsibility_support) || 0;
+    const breakfast_support = Number(form.values.breakfast_support) || 0;
+    
     // Calculate total salary using robustly defaulted values
     const calculated_total_salary =
       calculated_received_salary +
       final_extra_salary +
       final_skill_salary +
       final_english_salary +
+      insurance_support +
+      responsibility_support +
+      breakfast_support +
       new_students_list -
       paid_amount;
 
@@ -152,6 +160,9 @@ export default function EditTeacherPage() {
     form.values.english_salary, 
     form.values.received_salary,
     form.values.total_salary,
+    form.values.insurance_support,
+    form.values.responsibility_support,
+    form.values.breakfast_support,
     // form.setValues is stable from useForm, initialXXX refs are stable.
   ]);
 
@@ -198,6 +209,19 @@ export default function EditTeacherPage() {
     }
   };
 
+  // Prevent form submission when pressing enter in input fields
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLFormElement | HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  };
+
+  // Custom submit handler to ensure form is only submitted with button click
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    form.onSubmit(handleSubmit)(e);
+  };
+
   if (loading) {
     return (
       <Container size="lg" mt="md">
@@ -220,13 +244,14 @@ export default function EditTeacherPage() {
       </Group>
 
       <Paper withBorder p="md" radius="md">
-        <form onSubmit={form.onSubmit(handleSubmit)}>
+        <form onSubmit={handleFormSubmit} onKeyDown={handleKeyDown}>
           <Grid>
             <Grid.Col span={{ base: 12, md: 6 }}>
               <TextInput
                 label="Tên giáo viên"
                 placeholder="Nhập tên giáo viên"
                 required
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('name')}
               />
             </Grid.Col>
@@ -239,8 +264,9 @@ export default function EditTeacherPage() {
                   { value: 'GV', label: 'Giáo viên' },
                   { value: 'Quản lý', label: 'Quản lý' },
                   { value: 'Quản lý + GV', label: 'Quản lý + Giáo viên' },
-                  { value: 'Bảo mẫu', label: 'Bảo mẫu' },
+                  { value: 'Đầu bếp', label: 'Đầu bếp' },
                 ]}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('role')}
               />
             </Grid.Col>
@@ -248,6 +274,7 @@ export default function EditTeacherPage() {
               <TextInput
                 label="Số điện thoại"
                 placeholder="Nhập số điện thoại"
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('phone')}
               />
             </Grid.Col>
@@ -263,6 +290,7 @@ export default function EditTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('base_salary')}
               />
             </Grid.Col>
@@ -273,6 +301,7 @@ export default function EditTeacherPage() {
                 min={0}
                 max={31}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('teaching_days')}
               />
             </Grid.Col>
@@ -283,6 +312,7 @@ export default function EditTeacherPage() {
                 min={0}
                 max={31}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('absence_days')}
               />
             </Grid.Col>
@@ -294,6 +324,7 @@ export default function EditTeacherPage() {
                 thousandSeparator=","
                 readOnly
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('received_salary')}
               />
             </Grid.Col>
@@ -308,6 +339,7 @@ export default function EditTeacherPage() {
                 placeholder="Nhập số ngày dạy thêm"
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_teaching_days')}
               />
             </Grid.Col>
@@ -320,6 +352,7 @@ export default function EditTeacherPage() {
                 min={0}
                 readOnly
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_salary')}
               />
             </Grid.Col>
@@ -331,6 +364,7 @@ export default function EditTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('insurance_support')}
               />
             </Grid.Col>
@@ -342,6 +376,7 @@ export default function EditTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('responsibility_support')}
               />
             </Grid.Col>
@@ -353,6 +388,7 @@ export default function EditTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('breakfast_support')}
               />
             </Grid.Col>
@@ -367,6 +403,7 @@ export default function EditTeacherPage() {
                 placeholder="Nhập số buổi KNS"
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_sessions')}
               />
             </Grid.Col>
@@ -379,6 +416,7 @@ export default function EditTeacherPage() {
                 min={0}
                 readOnly
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_salary')}
               />
             </Grid.Col>
@@ -388,6 +426,7 @@ export default function EditTeacherPage() {
                 placeholder="Nhập số buổi TA"
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_sessions')}
               />
             </Grid.Col>
@@ -400,6 +439,7 @@ export default function EditTeacherPage() {
                 min={0}
                 readOnly
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_salary')}
               />
             </Grid.Col>
@@ -416,17 +456,19 @@ export default function EditTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('paid_amount')}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
               <NumberInput
                 label="Thưởng học sinh mới"
-                placeholder="Nhập thưởng HS mới"
+                placeholder="Nhập thưởng HS mới (100.000đ/HS)"
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('new_students_list')}
               />
             </Grid.Col>
@@ -441,6 +483,7 @@ export default function EditTeacherPage() {
                 size="lg"
                 styles={{ input: { textAlign: 'right', fontWeight: 'bold' } }}
                 decimalScale={0}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('total_salary')}
               />
             </Grid.Col>
@@ -456,6 +499,7 @@ export default function EditTeacherPage() {
                 autosize
                 minRows={3}
                 maxRows={6}
+                onKeyDown={handleKeyDown}
                 {...form.getInputProps('note')}
               />
             </Grid.Col>

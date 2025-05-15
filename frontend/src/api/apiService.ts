@@ -1,3 +1,5 @@
+'use client';
+
 import axios from 'axios';
 
 // Use environment variables with fallback to default URL
