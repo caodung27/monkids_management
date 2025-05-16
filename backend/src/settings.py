@@ -10,27 +10,36 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
+from dotenv import load_dotenv
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env file from the 'backend' directory (one level above BASE_DIR if BASE_DIR is backend/src/)
+load_dotenv(BASE_DIR.parent / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-zcx08w^8frl@c559zbt%!2&euf+ev52s1um1_9sb_1kz5z_t3b'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'your-default-secret-key-for-dev-only')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*'] # Consider restricting this in production
 
+# Custom user model
+AUTH_USER_MODEL = 'app.User'
 
 # Application definition
 
 INSTALLED_APPS = [
+    'src.app.apps.AppConfig',  # Use the app config class instead of just the app name
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -38,9 +47,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_yasg',
-    'src.app',
     'corsheaders',  # Add corsheaders app
+    'oauth2_provider',
+    'social_django',
 ]
 
 MIDDLEWARE = [
@@ -58,6 +70,25 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Next.js frontend
 ]
+
+# Allow cookies to be included in cross-site HTTP requests
+# Set SameSite and Secure based on DEBUG mode
+if DEBUG:
+    # Development settings - more permissive
+    CSRF_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = False
+else:
+    # Production settings - more secure
+    CSRF_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+
+# Additional CORS settings for cross-domain requests
+CORS_ALLOW_CREDENTIALS = True  # Critical for cookies
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only in development
 
 CORS_ALLOW_METHODS = [
     "DELETE",
@@ -78,6 +109,13 @@ CORS_ALLOW_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
+    "access-control-allow-credentials",
+    "access-control-allow-origin"
+]
+
+# Add CSRF trusted origins for secure cookies
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
 ]
 
 ROOT_URLCONF = 'src.urls'
@@ -92,6 +130,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
             ],
         },
     },
@@ -99,6 +139,133 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'src.wsgi.application'
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.google.GoogleOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+# REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'src.custom_pagination.CustomPageNumberPagination',
+    'PAGE_SIZE': 50,
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day'
+    },
+}
+
+# Simple JWT settings
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'JTI_CLAIM': 'jti',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+    
+    # More flexible token validation settings
+    'AUTH_COOKIE': 'access_token',  # Cookie name. 'access_token' is the default value
+    'AUTH_COOKIE_SECURE': False,    # Set to True in production with HTTPS
+    'AUTH_COOKIE_HTTP_ONLY': False,  # Allow JavaScript access to cookies for Bearer token usage
+    'AUTH_COOKIE_PATH': '/',        # Cookie path
+    'AUTH_COOKIE_SAMESITE': 'Lax',  # Adjust based on development or production. 'Lax' is fine if JS reads it.
+    
+    # Improve error messages
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+    
+    # Add customized token processing functions
+    'TOKEN_OBTAIN_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenObtainPairSerializer',
+    'TOKEN_REFRESH_SERIALIZER': 'src.app.serializers.CustomTokenRefreshSerializer',
+    'TOKEN_VERIFY_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenVerifySerializer',
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=60),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
+
+# Google OAuth2 settings
+#SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.environ.get('GOOGLE_CLIENT_ID')
+#SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '542269964324-6kmatcq5rp19lefr3eiouu60hkqdg6jk.apps.googleusercontent.com'
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'
+
+# Define the redirect URI explicitly 
+SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'http://localhost:8000/oauth/complete/google-oauth2/'
+
+# Basic social auth settings
+SOCIAL_AUTH_GOOGLE_OAUTH2_AUTH_EXTRA_ARGUMENTS = {'access_type': 'offline', 'prompt': 'consent'}
+SOCIAL_AUTH_JSONFIELD_ENABLED = True
+SOCIAL_AUTH_ADMIN_USER_SEARCH_FIELDS = ['email', 'first_name', 'last_name']
+SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = True
+SOCIAL_AUTH_USE_DEPRECATED_AUTH_BACKEND_SETTING = True
+
+# Additional social auth settings
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+)
+
+# Add debug settings for OAuth
+SOCIAL_AUTH_RAISE_EXCEPTIONS = True
+RAISE_EXCEPTIONS = True
+DEBUG = True
+
+# URL settings
+LOGIN_REDIRECT_URL = 'http://localhost:3000/dashboard'  # Frontend URL
+LOGIN_URL = '/oauth/login/google-oauth2/'
+LOGOUT_URL = '/api/auth/logout/'
+
+# Google OAuth scope
+SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ['email', 'profile']
+
+# Bổ sung xác thực OAuth
+SOCIAL_AUTH_STRATEGY = 'social_django.strategy.DjangoStrategy'
+SOCIAL_AUTH_STORAGE = 'social_django.models.DjangoStorage'
+SOCIAL_AUTH_FIELDS_STORED_IN_SESSION = ['state']
+SOCIAL_AUTH_REDIRECT_IS_HTTPS = False  # Set to True in production
+SOCIAL_AUTH_PROTECTED_USER_FIELDS = ['email']
+
+# Prevent auto-redirect after login
+SOCIAL_AUTH_NEW_USER_REDIRECT_URL = 'http://localhost:3000/dashboard'
+SOCIAL_AUTH_NEW_ASSOCIATION_REDIRECT_URL = 'http://localhost:3000/dashboard'
+SOCIAL_AUTH_DISCONNECT_REDIRECT_URL = 'http://localhost:3000/login'
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = 'http://localhost:3000/dashboard'
+
+# Debug OAuth issues
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/api/auth/error/'
+SOCIAL_AUTH_GITHUB_WHITELISTED_DOMAINS = ['*']
+SOCIAL_AUTH_SANITIZE_REDIRECTS = False
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -161,8 +328,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Swagger documentation settings
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
-        'Basic': {
-            'type': 'basic'
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
         }
     },
     'DEFAULT_MODEL_RENDERING': 'example',

@@ -8,7 +8,7 @@ import '../styles/globals.css';
 const App = dynamic(() => import('./App'), { ssr: true });
 
 export const metadata: Metadata = {
-  title: 'Mầm Non MonKids',
+  title: 'MẦM NON ĐỘC LẬP MONKIDS',
   description: 'Hệ thống quản lý học sinh và giáo viên',
 };
 
