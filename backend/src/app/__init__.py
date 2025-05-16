@@ -1,3 +1,3 @@
 # Django app initialization
 
-default_app_config = 'src.app.apps.AppConfig'
+default_app_config = 'src.apps.MonkidConfig'

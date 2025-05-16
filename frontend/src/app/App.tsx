@@ -8,6 +8,8 @@ import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { Provider as ReduxProvider } from 'react-redux';
 import { store } from '@/store/store';
+import { AuthProvider } from '@/contexts/AuthContext';
+import AuthWrapper from '@/components/auth/AuthWrapper';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 
@@ -28,7 +30,11 @@ export default function App({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <MantineProvider>
           <Notifications position="top-right" />
-          {children}
+          <AuthProvider>
+            <AuthWrapper>
+              {children}
+            </AuthWrapper>
+          </AuthProvider>
         </MantineProvider>
       </QueryClientProvider>
     </ReduxProvider>

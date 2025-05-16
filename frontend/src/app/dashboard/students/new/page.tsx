@@ -118,6 +118,19 @@ export default function NewStudentPage() {
 
   const handleSubmit = async (formValues: Omit<Student, 'student_id' | 'sequential_number'> & { birthdate: Date | null }) => {
     try {
+      // Verify authentication first
+      const { TokenService } = await import('@/api/apiService');
+      const isAuthenticated = await TokenService.verifyAndRefreshTokens();
+      
+      if (!isAuthenticated) {
+        notifications.show({
+          title: 'Lỗi xác thực',
+          message: 'Bạn cần đăng nhập lại để thực hiện thao tác này.',
+          color: 'red',
+        });
+        return;
+      }
+      
       const apiPayload = {
         name: formValues.name,
         classroom: formValues.classroom,
@@ -139,6 +152,13 @@ export default function NewStudentPage() {
         paid_amount: String(formValues.paid_amount || 0),
         remaining_amount: String(formValues.remaining_amount || 0),
       };
+      
+      console.log('Authentication check before creating student:', {
+        hasAccessToken: !!localStorage.getItem('accessToken'),
+        hasRefreshToken: !!localStorage.getItem('refreshToken'),
+        authSuccess: localStorage.getItem('auth_successful')
+      });
+      
       await studentApi.createStudent(apiPayload);
       notifications.show({
         title: 'Thành công',
@@ -146,11 +166,34 @@ export default function NewStudentPage() {
         color: 'green',
       });
       router.push('/dashboard/students');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving student:', error);
+      
+      // Check for authentication errors (401)
+      if (error.response && error.response.status === 401) {
+        // Authentication error
+        notifications.show({
+          title: 'Lỗi xác thực',
+          message: 'Bạn cần đăng nhập lại để thực hiện thao tác này.',
+          color: 'red',
+        });
+        return;
+      }
+      
+      // Permission error (403)
+      if (error.response && error.response.status === 403) {
+        notifications.show({
+          title: 'Không có quyền',
+          message: 'Bạn không có quyền thêm học sinh. Chỉ giáo viên và quản trị viên mới có quyền này.',
+          color: 'red',
+        });
+        return;
+      }
+      
+      // Other errors
       notifications.show({
         title: 'Lỗi',
-        message: 'Có lỗi xảy ra khi thêm học sinh. Vui lòng thử lại.',
+        message: `Có lỗi xảy ra khi thêm học sinh: ${error.response?.data?.detail || 'Vui lòng thử lại.'}`,
         color: 'red',
       });
     }

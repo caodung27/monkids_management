@@ -30,7 +30,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <MantineAppShell.Header>
         <Group h="100%" px="md">
           <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-          <Text size="lg" fw={700}>Mầm Non MonKids</Text>
+          <Text size="lg" fw={700}>MẦM NON ĐỘC LẬP MONKIDS</Text>
         </Group>
       </MantineAppShell.Header>
 

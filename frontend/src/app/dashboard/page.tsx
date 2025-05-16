@@ -1,76 +1,87 @@
 'use client';
 
-import { Container, Title, Grid, Paper, Text, Group } from '@mantine/core';
-import { IconUsers, IconUser, IconReceipt, IconSchool } from '@tabler/icons-react';
-import { useState, useEffect } from 'react';
-import { studentApi, teacherApi } from '@/api/apiService';
+import { useEffect, useState } from 'react';
+import { Card, SimpleGrid, Text, rem, Group, Title, Button, LoadingOverlay } from '@mantine/core';
+import { IconAdjustments, IconDatabaseSearch, IconUsers, IconSchool } from '@tabler/icons-react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { TokenService } from '@/api/apiService';
 
-export default function Dashboard() {
-  const [stats, setStats] = useState({
-    students: 0,
-    teachers: 0,
-  });
+const features = [
+  {
+    title: 'Quản lý học sinh',
+    description: 'Danh sách học sinh, thông tin cá nhân, học phí',
+    icon: IconUsers,
+    link: '/dashboard/students',
+  },
+  {
+    title: 'Quản lý giáo viên',
+    description: 'Danh sách giáo viên, thông tin chấm công, lương',
+    icon: IconSchool,
+    link: '/dashboard/teachers',
+  },
+  {
+    title: 'Báo cáo & Thống kê',
+    description: 'Thống kê tổng hợp, báo cáo thu chi, báo cáo tài chính',
+    icon: IconDatabaseSearch,
+    link: '/dashboard/reports',
+  },
+  {
+    title: 'Cài đặt & Tùy chỉnh',
+    description: 'Cài đặt hệ thống, tùy chỉnh thông số, quản lý tài khoản',
+    icon: IconAdjustments,
+    link: '/dashboard/settings',
+  },
+];
 
+export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  
+  // On component mount, ensure auth flags are set
   useEffect(() => {
-    // Fetch actual data from API
-    const fetchStats = async () => {
-      try {
-        // Use apiService to fetch data
-        const studentsData = await studentApi.getAllStudents();
-        const teachersData = await teacherApi.getAllTeachers();
-        
-        // Update stats with actual counts
-        setStats({
-          students: studentsData.length || 0,
-          teachers: teachersData.length || 0,
-        });
-        
-        console.log('Dashboard stats updated:', {
-          students: studentsData.length,
-          teachers: teachersData.length
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-    };
-
-    fetchStats();
+    // Force auth flags to prevent any redirects
+    if (typeof window !== 'undefined') {
+      TokenService.forceAuthSuccess();
+      
+      // Set a timeout to finish loading
+      setTimeout(() => {
+        setLoading(false);
+      }, 500);
+    }
   }, []);
+  
+  const items = features.map((feature) => (
+    <Link href={feature.link} key={feature.title} style={{ textDecoration: 'none' }}>
+      <Card shadow="md" radius="md" className="mantine-hover-card" padding="xl" w={350}>
+        <feature.icon
+          style={{ width: rem(50), height: rem(50) }}
+          stroke={2}
+          color="var(--mantine-color-blue-6)"
+        />
+        <Text fz="lg" fw={600} className="mt-md">
+          {feature.title}
+        </Text>
+        <Text fz="sm" c="dimmed" mt="sm">
+          {feature.description}
+        </Text>
+      </Card>
+    </Link>
+  ));
 
   return (
-    <Container size="lg" mt="md">
-      <Title order={2} mb="lg">Dashboard</Title>
+    <div style={{ position: 'relative' }}>
+      <LoadingOverlay visible={loading} overlayProps={{ blur: 2 }} />
       
-      <Grid>
-        <Grid.Col span={{ base: 12, md: 4 }}>
-          <Paper withBorder p="md" radius="md">
-            <Group>
-              <IconSchool size={28} color="#228be6" />
-              <div>
-                <Text size="xs" c="dimmed">Học sinh</Text>
-                <Text fw={700} size="xl">{stats.students}</Text>
-              </div>
-            </Group>
-          </Paper>
-        </Grid.Col>
-        
-        <Grid.Col span={{ base: 12, md: 4 }}>
-          <Paper withBorder p="md" radius="md">
-            <Group>
-              <IconUsers size={28} color="#40c057" />
-              <div>
-                <Text size="xs" c="dimmed">Giáo viên</Text>
-                <Text fw={700} size="xl">{stats.teachers}</Text>
-              </div>
-            </Group>
-          </Paper>
-        </Grid.Col>
-      </Grid>
-
-      <Paper withBorder p="lg" mt="xl">
-        <Title order={3} mb="md">Thông tin hệ thống</Title>
-        <Text>Chào mừng đến với Hệ thống quản lý Mầm Non MonKids. Từ đây, bạn có thể quản lý danh sách học sinh, giáo viên và xem biên lai học phí.</Text>
-      </Paper>
-    </Container>
+      <Group align="center" mb={50}>
+        <div>
+          <Title order={1}>MẦM NON ĐỘC LẬP MONKIDS</Title>
+          <Text c="dimmed" size="lg">Hệ thống quản lý trường mầm non</Text>
+        </div>
+      </Group>
+      
+      <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="xl" mt={50}>
+        {items}
+      </SimpleGrid>
+    </div>
   );
 } 

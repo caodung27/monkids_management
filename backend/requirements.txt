@@ -6,4 +6,9 @@ pytz==2024.1
 sqlparse==0.5.0
 uuid==1.30
 drf-yasg==1.21.7
-django-cors-headers==4.13.2 
+django-cors-headers==4.13.2
+djangorestframework-simplejwt==5.3.1
+social-auth-app-django==5.4.0
+django-oauth-toolkit==2.3.0
+google-auth==2.29.0
+python-dotenv 
