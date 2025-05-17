@@ -11,7 +11,8 @@ import {
   Anchor, 
   Paper,
   Container,
-  Stack
+  Stack,
+  Loader
 } from '@mantine/core';
 import { useForm, zodResolver } from '@mantine/form';
 import { z } from 'zod';
@@ -81,7 +82,7 @@ export default function RegisterPage() {
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <Loader size="xl" />;
   }
 
   return (

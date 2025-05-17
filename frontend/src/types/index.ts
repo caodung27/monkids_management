@@ -87,3 +87,12 @@ export interface TeacherApiPayload {
   total_salary: string;
   note?: string | null;
 }
+
+export interface ProfileData {
+  first_name: string;
+  last_name: string;
+  email: string;
+  profile_picture: string | null;
+  is_teacher: boolean;
+  is_admin: boolean;
+}

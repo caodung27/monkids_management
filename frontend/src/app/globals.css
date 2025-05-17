@@ -1,8 +1,15 @@
-@import "tailwindcss";
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background-light: #f8f9fa;
+  --foreground-light: #1a1b1e;
+  --paper-light: #ffffff;
+  --border-light: #e9ecef;
+  --divider-light: #dee2e6;
+  
+  --background-dark: #1a1b1e;
+  --foreground-dark: #c1c2c5;
+  --paper-dark: #25262b;
+  --border-dark: #2c2e33;
+  --divider-dark: #373a40;
 }
 
 @theme inline {
@@ -19,8 +26,74 @@
   }
 }
 
+body[data-mantine-color-scheme="light"] {
+  --background: var(--background-light);
+  --foreground: var(--foreground-light);
+  --paper: var(--paper-light);
+  --border: var(--border-light);
+  --divider: var(--divider-light);
+}
+
+body[data-mantine-color-scheme="dark"] {
+  --background: var(--background-dark);
+  --foreground: var(--foreground-dark);
+  --paper: var(--paper-dark);
+  --border: var(--border-dark);
+  --divider: var(--divider-dark);
+}
+
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Improved form controls for dark mode */
+body[data-mantine-color-scheme="dark"] .mantine-TextInput-input,
+body[data-mantine-color-scheme="dark"] .mantine-PasswordInput-input,
+body[data-mantine-color-scheme="dark"] .mantine-Textarea-input,
+body[data-mantine-color-scheme="dark"] .mantine-Select-input,
+body[data-mantine-color-scheme="dark"] .mantine-NumberInput-input {
+  background-color: #25262b;
+  border-color: #2c2e33;
+  color: #c1c2c5;
+}
+
+/* Paper styles */
+.mantine-Paper-root {
+  background-color: var(--paper);
+  border-color: var(--border);
+}
+
+/* Additional styling for dark mode elements */
+body[data-mantine-color-scheme="dark"] .mantine-Card-root,
+body[data-mantine-color-scheme="dark"] .mantine-Paper-root {
+  background-color: var(--paper-dark);
+}
+
+/* Divider styling */
+.mantine-Divider-root {
+  border-color: var(--divider);
+}
+
+/* Better transitions for theme toggling */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Table styling improvements for dark mode */
+body[data-mantine-color-scheme="dark"] .mantine-Table-root th {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--foreground-dark);
+}
+
+body[data-mantine-color-scheme="dark"] .mantine-Table-root tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Menu dropdowns for dark mode */
+body[data-mantine-color-scheme="dark"] .mantine-Menu-dropdown {
+  background-color: var(--paper-dark);
+  border-color: var(--border-dark);
 }

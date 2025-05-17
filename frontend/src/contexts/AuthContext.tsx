@@ -138,8 +138,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
          localStorage.getItem('auth_successful') === 'true' ||
          document.cookie.includes('auth_redirect=true'));
          
-      console.log('AuthProvider: Token check', { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken, isFromOAuth });
-      
       if (isFromOAuth) {
         console.log('AuthProvider: OAuth flow detected, allowing access');
         // Get current user if we don't have user data yet
@@ -199,19 +197,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // First check cookies and localStorage
         const accessToken = TokenService.getAccessToken();
         const refreshToken = TokenService.getRefreshToken();
-        
-        console.log('AuthProvider: Initial auth check', { 
-          hasAccessToken: !!accessToken, 
-          hasRefreshToken: !!refreshToken,
-          localStorage: typeof window !== 'undefined' ? {
-            accessToken: localStorage.getItem('accessToken'),
-            refreshToken: localStorage.getItem('refreshToken'),
-            authSuccess: localStorage.getItem('auth_successful')
-          } : null,
-          sessionStorage: typeof window !== 'undefined' ? {
-            authSuccess: sessionStorage.getItem('auth_successful')
-          } : null
-        });
         
         // Check for OAuth flags
         const isOAuthSuccess = typeof window !== 'undefined' && (

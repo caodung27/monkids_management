@@ -39,30 +39,12 @@ export const TokenService = {
       const lsToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
       const cookieToken = Cookies.get('accessToken'); 
       const sessionToken = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null;
-      
-      // MORE DETAILED LOGGING FOR COOKIES
-      const allCookies = Cookies.get(); // Get all cookies as an object
-      console.log('TokenService.getAccessToken: All js-cookies visible:', allCookies);
-      if (allCookies && typeof allCookies === 'object' && 'accessToken' in allCookies) {
-        console.log('TokenService.getAccessToken: "accessToken" key found in Cookies.get() object. Value:', allCookies.accessToken ? allCookies.accessToken.substring(0,10) + '...' : 'EMPTY_STRING');
-      } else {
-        console.log('TokenService.getAccessToken: "accessToken" key NOT found in Cookies.get() object.');
-      }
-      console.log('TokenService.getAccessToken: Direct Cookies.get("accessToken") attempt:', cookieToken ? cookieToken.substring(0,10) + '...' : 'NULL/UNDEFINED');
-
-      console.log('TokenService.getAccessToken sources:', {
-        localStorage: !!lsToken,
-        cookiesViaDirectGet: !!cookieToken, // Explicitly log direct get
-        sessionStorage: !!sessionToken
-      });
-      
       const token = lsToken || cookieToken || sessionToken;
       
       if (token) {
         try {
           const parts = token.split('.');
           if (parts.length !== 3) {
-            console.error('TokenService: Invalid token format detected from source:', { lsToken: !!lsToken, cookieToken: !!cookieToken, sessionToken: !!sessionToken });
             return null;
           }
           
@@ -71,10 +53,8 @@ export const TokenService = {
             const payload = JSON.parse(atob(payloadBase64));
             const now = Math.floor(Date.now() / 1000);
             if (payload.exp && payload.exp < now) {
-              console.error('TokenService: Token is expired', { exp: payload.exp, now, diff: now - payload.exp, tokenSource: { lsToken: !!lsToken, cookieToken: !!cookieToken, sessionToken: !!sessionToken } });
               return null;
             }
-            console.log('TokenService: Token is valid (format and expiry)', { exp: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'none', type: payload.token_type || 'unknown' });
           } catch (parseError) {
             console.warn('TokenService: Could not parse token payload, but format seems JWT-like.', parseError);
           }
@@ -103,13 +83,11 @@ export const TokenService = {
         return null;
       }
       const cleanToken = token.trim();
-      console.log(`TokenService.setAccessToken: Setting token ${cleanToken.substring(0, 10)}...`);
       
       if (typeof window !== 'undefined') {
         localStorage.setItem('accessToken', cleanToken);
         sessionStorage.setItem('accessToken', cleanToken);
         localStorage.setItem('token_set_time', Date.now().toString());
-        console.log('TokenService.setAccessToken: Successfully set in localStorage and sessionStorage.');
       }
       
       const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
@@ -122,13 +100,11 @@ export const TokenService = {
           secure: true
         };
         Cookies.set('accessToken', cleanToken, cookieAttributes);
-        console.log('TokenService.setAccessToken (HTTPS): Attempted to set cookie via Cookies.set() with attributes:', cookieAttributes);
       } else {
         // HTTP (localhost) - Use direct document.cookie assignment
         const expires = new Date(Date.now() + COOKIE_OPTIONS.expires * 24 * 60 * 60 * 1000).toUTCString();
         const cookieString = `accessToken=${encodeURIComponent(cleanToken)}; path=${COOKIE_OPTIONS.path}; expires=${expires}`;
         document.cookie = cookieString;
-        console.log('TokenService.setAccessToken (HTTP): Attempted to set cookie via document.cookie:', cookieString);
       }
 
       // Verification step for cookie (always use Cookies.get for reading)
@@ -370,8 +346,6 @@ export const TokenService = {
         }
       };
       
-      console.log('TokenService: Token check result', tokenStatus);
-      
       // Return true if we have any token
       return !!(
         lsAccessToken || lsRefreshToken || 
@@ -602,9 +576,6 @@ export const TokenService = {
     }
   },
 };
-
-// Log API URL to help with debugging
-console.log('API URL:', API_URL);
 
 // CORS-aware axios instance
 const apiClient = axios.create({
@@ -837,29 +808,28 @@ export const authApi = {
     return response.data;
   },
   getCurrentUser: async () => {
-    try {
-      // Get token directly to ensure it's available
-      const token = TokenService.getAccessToken();
-      
-      if (!token) {
-        console.error('getCurrentUser: No access token available!');
+      try {
+        // Get token directly to ensure it's available
+        const token = TokenService.getAccessToken();
+        
+        if (!token) {
+          console.error('getCurrentUser: No access token available!');
+        }
+        
+        // Make the request with explicit authorization header
+        const response = await axios.get(`${API_URL}/users/me/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true
+        });
+        
+        return response.data;
+      } catch (error) {
+        console.error('getCurrentUser: Error', error);
+        throw error;
       }
-      
-      // Make the request with explicit authorization header
-      const response = await axios.get(`${API_URL}/users/me/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        withCredentials: true
-      });
-      
-      console.log('getCurrentUser: Success', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('getCurrentUser: Error', error);
-      throw error;
-    }
   },
   getUserPermissions: async () => {
     try {
@@ -879,7 +849,6 @@ export const authApi = {
         withCredentials: true
       });
       
-      console.log('getUserPermissions: Success', response.data);
       return response.data;
     } catch (error) {
       console.error('getUserPermissions: Error', error);
@@ -887,9 +856,9 @@ export const authApi = {
     }
   },
   refreshToken: async (refreshToken: string) => {
-    const response = await apiClient.post('/token/refresh/', { refresh: refreshToken });
-    TokenService.setAccessToken(response.data.access);
-    return response.data;
+      const response = await apiClient.post('/token/refresh/', { refresh: refreshToken });
+      TokenService.setAccessToken(response.data.access);
+      return response.data;
   },
   exchangeSessionForToken: async () => {
     try {
@@ -925,65 +894,86 @@ export const authApi = {
       return { active: false, error: error };
     }
   },
+  updateProfile: async (profileData: any) => {
+    try {
+      const token = TokenService.getAccessToken();
+      
+      if (!token) {
+        console.error('updateProfile: No access token available!');
+      }
+      
+      // First get current user to obtain ID
+      const user = await authApi.getCurrentUser();
+      const userId = user?.id;
+      
+      if (!userId) {
+        throw new Error('Failed to get user ID for profile update');
+      }
+      
+      const response = await axios.patch(`${API_URL}/users/${userId}/`, profileData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        withCredentials: true
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('updateProfile: Error', error);
+      throw error;
+    }
+  },
 };
 
 // Student API
 export const studentApi = {
   getAllStudents: async (page = 1, pageSize = 50) => {
     try {
-      // Get token directly for better reliability
-      let token = TokenService.getAccessToken();
-      
-      // If no token available but we have auth flags, try to force authentication
-      if (!token && (localStorage.getItem('auth_successful') === 'true' || 
-                     sessionStorage.getItem('auth_successful') === 'true')) {
-        console.log('getAllStudents: No token but auth flags present, attempting auth refresh');
+        // Get token directly for better reliability
+        let token = TokenService.getAccessToken();
         
-        // Try to refresh token if available
-        const refreshToken = TokenService.getRefreshToken();
-        if (refreshToken) {
-          try {
-            // Try explicit token refresh
-            await authApi.refreshToken(refreshToken);
+        // If no token available but we have auth flags, try to force authentication
+        if (!token && (localStorage.getItem('auth_successful') === 'true' || 
+                       sessionStorage.getItem('auth_successful') === 'true')) {
+          console.log('getAllStudents: No token but auth flags present, attempting auth refresh');
+          
+          // Try to refresh token if available
+          const refreshToken = TokenService.getRefreshToken();
+          if (refreshToken) {
+            try {
+              // Try explicit token refresh
+              await authApi.refreshToken(refreshToken);
+              token = TokenService.getAccessToken();
+              console.log('getAllStudents: Successfully refreshed token');
+            } catch (refreshError) {
+              console.error('getAllStudents: Token refresh failed', refreshError);
+            }
+          }
+          
+          // If still no token but we have auth flags, force auth success
+          if (!token) {
+            console.log('getAllStudents: Forcing auth flags after refresh failure');
+            TokenService.forceAuthSuccess();
+            
+            // Try to re-fetch token one more time before proceeding
             token = TokenService.getAccessToken();
-            console.log('getAllStudents: Successfully refreshed token');
-          } catch (refreshError) {
-            console.error('getAllStudents: Token refresh failed', refreshError);
           }
         }
         
-        // If still no token but we have auth flags, force auth success
-        if (!token) {
-          console.log('getAllStudents: Forcing auth flags after refresh failure');
-          TokenService.forceAuthSuccess();
-          
-          // Try to re-fetch token one more time before proceeding
-          token = TokenService.getAccessToken();
-        }
-      }
-      
-      // Create URL with pagination and size parameter (updated from page_size)
-      const url = `${API_URL}/students/?page=${page}&size=${pageSize}`;
-      
-      // Make request with explicit authorization header
-      const response = await axios.get(url, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Content-Type': 'application/json'
-        },
-        withCredentials: true
-      });
-      
-      console.log('getAllStudents: Success', {
-        count: response.data.count,
-        total_pages: response.data.total_pages,
-        page,
-        pageSize,
-        hasNext: !!response.data.next,
-        hasPrevious: !!response.data.previous
-      });
-      
-      return response.data;
+        // Create URL with pagination and size parameter
+        const url = `${API_URL}/students/?page=${page}&size=${pageSize}`;
+        
+        // Make request with explicit authorization header
+        const response = await axios.get(url, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true
+        });
+        
+        return response.data;
     } catch (error: any) {
       // Special handling for 401 Unauthorized error
       if (error.response?.status === 401) {
@@ -1034,7 +1024,7 @@ export const studentApi = {
                      sessionStorage.getItem('auth_successful') === 'true')) {
         console.log('getStudentById: No token but auth flags present, attempting auth refresh');
         await authApi.refreshToken(TokenService.getRefreshToken() || '');
-        token = TokenService.getAccessToken();
+          token = TokenService.getAccessToken();
       }
       
       // Make request with explicit authorization header
@@ -1054,18 +1044,18 @@ export const studentApi = {
         
         try {
           await authApi.refreshToken(TokenService.getRefreshToken() || '');
-          const newToken = TokenService.getAccessToken();
+            const newToken = TokenService.getAccessToken();
           
-          if (newToken) {
-            console.log('getStudentById: Retrying after token refresh');
-            const retryResponse = await axios.get(`${API_URL}/students/${id}/`, {
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              },
-              withCredentials: true
-            });
-            return retryResponse.data;
+            if (newToken) {
+              console.log('getStudentById: Retrying after token refresh');
+              const retryResponse = await axios.get(`${API_URL}/students/${id}/`, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json'
+                },
+                withCredentials: true
+              });
+              return retryResponse.data;
           }
         } catch (refreshError) {
           console.error('getStudentById: Retry failed after token refresh', refreshError);
@@ -1164,7 +1154,7 @@ export const studentApi = {
                      sessionStorage.getItem('auth_successful') === 'true')) {
         console.log('updateStudent: No token but auth flags present, attempting auth refresh');
         await authApi.refreshToken(TokenService.getRefreshToken() || '');
-        token = TokenService.getAccessToken();
+          token = TokenService.getAccessToken();
       }
       
       // Make request with explicit authorization header
@@ -1184,18 +1174,18 @@ export const studentApi = {
         
         try {
           await authApi.refreshToken(TokenService.getRefreshToken() || '');
-          const newToken = TokenService.getAccessToken();
-          
-          if (newToken) {
-            console.log('updateStudent: Retrying after token refresh');
-            const retryResponse = await axios.put(`${API_URL}/students/${id}/`, data, {
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              },
-              withCredentials: true
-            });
-            return retryResponse.data;
+            const newToken = TokenService.getAccessToken();
+            
+            if (newToken) {
+              console.log('updateStudent: Retrying after token refresh');
+              const retryResponse = await axios.put(`${API_URL}/students/${id}/`, data, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json'
+                },
+                withCredentials: true
+              });
+              return retryResponse.data;
           }
         } catch (refreshError) {
           console.error('updateStudent: Retry failed after token refresh', refreshError);
@@ -1216,7 +1206,7 @@ export const studentApi = {
                      sessionStorage.getItem('auth_successful') === 'true')) {
         console.log('deleteStudent: No token but auth flags present, attempting auth refresh');
         await authApi.refreshToken(TokenService.getRefreshToken() || '');
-        token = TokenService.getAccessToken();
+          token = TokenService.getAccessToken();
       }
       
       // Make request with explicit authorization header
@@ -1236,18 +1226,18 @@ export const studentApi = {
         
         try {
           await authApi.refreshToken(TokenService.getRefreshToken() || '');
-          const newToken = TokenService.getAccessToken();
-          
-          if (newToken) {
-            console.log('deleteStudent: Retrying after token refresh');
-            const retryResponse = await axios.delete(`${API_URL}/students/${id}/`, {
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              },
-              withCredentials: true
-            });
-            return retryResponse.data;
+            const newToken = TokenService.getAccessToken();
+            
+            if (newToken) {
+              console.log('deleteStudent: Retrying after token refresh');
+              const retryResponse = await axios.delete(`${API_URL}/students/${id}/`, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json'
+                },
+                withCredentials: true
+              });
+              return retryResponse.data;
           }
         } catch (refreshError) {
           console.error('deleteStudent: Retry failed after token refresh', refreshError);
@@ -1263,7 +1253,7 @@ export const studentApi = {
     try {
       // Get token directly for better reliability
       let token = TokenService.getAccessToken();
-      
+        
       // If no token available but we have auth flags, try to force authentication
       if (!token && (localStorage.getItem('auth_successful') === 'true' || 
                      sessionStorage.getItem('auth_successful') === 'true')) {
@@ -1308,14 +1298,14 @@ export const studentApi = {
             const newToken = TokenService.getAccessToken();
             if (newToken) {
               console.log('bulkDeleteStudents: Retrying after token refresh');
-              const retryResponse = await axios.post(`${API_URL}/students/bulk_delete/`, { ids }, {
-                headers: {
-                  'Authorization': `Bearer ${newToken}`,
-                  'Content-Type': 'application/json'
-                },
-                withCredentials: true
-              });
-              return retryResponse.data;
+          const retryResponse = await axios.post(`${API_URL}/students/bulk_delete/`, { ids }, {
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+              'Content-Type': 'application/json'
+            },
+            withCredentials: true
+          });
+          return retryResponse.data;
             }
           }
         } catch (refreshError) {
@@ -1359,59 +1349,50 @@ const getEmergencyToken = async () => {
 export const teacherApi = {
   getAllTeachers: async (page = 1, pageSize = 10) => {
     try {
-      // Get token directly for better reliability
-      let token = TokenService.getAccessToken();
-      
-      // If no token available but we have auth flags, try to force authentication
-      if (!token && (localStorage.getItem('auth_successful') === 'true' || 
-                    sessionStorage.getItem('auth_successful') === 'true')) {
-        console.log('getAllTeachers: No token but auth flags present, attempting auth refresh');
+        // Get token directly for better reliability
+        let token = TokenService.getAccessToken();
         
-        // Try to refresh token if available
-        const refreshToken = TokenService.getRefreshToken();
-        if (refreshToken) {
-          try {
-            // Try explicit token refresh
-            await authApi.refreshToken(refreshToken);
+        // If no token available but we have auth flags, try to force authentication
+        if (!token && (localStorage.getItem('auth_successful') === 'true' || 
+                      sessionStorage.getItem('auth_successful') === 'true')) {
+          console.log('getAllTeachers: No token but auth flags present, attempting auth refresh');
+          
+          // Try to refresh token if available
+          const refreshToken = TokenService.getRefreshToken();
+          if (refreshToken) {
+            try {
+              // Try explicit token refresh
+              await authApi.refreshToken(refreshToken);
+              token = TokenService.getAccessToken();
+              console.log('getAllTeachers: Successfully refreshed token');
+            } catch (refreshError) {
+              console.error('getAllTeachers: Token refresh failed', refreshError);
+            }
+          }
+          
+          // If still no token but we have auth flags, force auth success
+          if (!token) {
+            console.log('getAllTeachers: Forcing auth flags after refresh failure');
+            TokenService.forceAuthSuccess();
+            
+            // Try to re-fetch token one more time before proceeding
             token = TokenService.getAccessToken();
-            console.log('getAllTeachers: Successfully refreshed token');
-          } catch (refreshError) {
-            console.error('getAllTeachers: Token refresh failed', refreshError);
           }
         }
         
-        // If still no token but we have auth flags, force auth success
-        if (!token) {
-          console.log('getAllTeachers: Forcing auth flags after refresh failure');
-          TokenService.forceAuthSuccess();
-          
-          // Try to re-fetch token one more time before proceeding
-          token = TokenService.getAccessToken();
-        }
-      }
-      
-      // Create URL with pagination and size parameter (updated from page_size)
-      const url = `${API_URL}/teachers/?page=${page}&size=${pageSize}`;
-      
-      // Make request with explicit authorization header
-      const response = await axios.get(url, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Content-Type': 'application/json'
-        },
-        withCredentials: true
-      });
-      
-      console.log('getAllTeachers: Success', {
-        count: response.data.count,
-        total_pages: response.data.total_pages,
-        page,
-        pageSize,
-        hasNext: !!response.data.next,
-        hasPrevious: !!response.data.previous
-      });
-      
-      return response.data;
+        // Create URL with pagination and size parameter (updated from page_size)
+        const url = `${API_URL}/teachers/?page=${page}&size=${pageSize}`;
+        
+        // Make request with explicit authorization header
+        const response = await axios.get(url, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true
+        });
+        
+        return response.data;
     } catch (error: any) {
       // Special handling for 401 Unauthorized error
       if (error.response?.status === 401) {
@@ -1462,7 +1443,7 @@ export const teacherApi = {
                      sessionStorage.getItem('auth_successful') === 'true')) {
         console.log('getTeacherById: No token but auth flags present, attempting auth refresh');
         await authApi.refreshToken(TokenService.getRefreshToken() || '');
-        token = TokenService.getAccessToken();
+          token = TokenService.getAccessToken();
       }
       
       // Make request with explicit authorization header
@@ -1482,18 +1463,18 @@ export const teacherApi = {
         
         try {
           await authApi.refreshToken(TokenService.getRefreshToken() || '');
-          const newToken = TokenService.getAccessToken();
+            const newToken = TokenService.getAccessToken();
           
-          if (newToken) {
-            console.log('getTeacherById: Retrying after token refresh');
-            const retryResponse = await axios.get(`${API_URL}/teachers/${id}/`, {
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              },
-              withCredentials: true
-            });
-            return retryResponse.data;
+            if (newToken) {
+              console.log('getTeacherById: Retrying after token refresh');
+              const retryResponse = await axios.get(`${API_URL}/teachers/${id}/`, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json'
+                },
+                withCredentials: true
+              });
+              return retryResponse.data;
           }
         } catch (refreshError) {
           console.error('getTeacherById: Retry failed after token refresh', refreshError);
@@ -1576,7 +1557,7 @@ export const teacherApi = {
                      sessionStorage.getItem('auth_successful') === 'true')) {
         console.log('updateTeacher: No token but auth flags present, attempting auth refresh');
         await authApi.refreshToken(TokenService.getRefreshToken() || '');
-        token = TokenService.getAccessToken();
+          token = TokenService.getAccessToken();
       }
       
       // Make request with explicit authorization header
@@ -1596,18 +1577,18 @@ export const teacherApi = {
         
         try {
           await authApi.refreshToken(TokenService.getRefreshToken() || '');
-          const newToken = TokenService.getAccessToken();
-          
-          if (newToken) {
-            console.log('updateTeacher: Retrying after token refresh');
-            const retryResponse = await axios.put(`${API_URL}/teachers/${id}/`, data, {
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              },
-              withCredentials: true
-            });
-            return retryResponse.data;
+            const newToken = TokenService.getAccessToken();
+            
+            if (newToken) {
+              console.log('updateTeacher: Retrying after token refresh');
+              const retryResponse = await axios.put(`${API_URL}/teachers/${id}/`, data, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json'
+                },
+                withCredentials: true
+              });
+              return retryResponse.data;
           }
         } catch (refreshError) {
           console.error('updateTeacher: Retry failed after token refresh', refreshError);
@@ -1628,7 +1609,7 @@ export const teacherApi = {
                      sessionStorage.getItem('auth_successful') === 'true')) {
         console.log('deleteTeacher: No token but auth flags present, attempting auth refresh');
         await authApi.refreshToken(TokenService.getRefreshToken() || '');
-        token = TokenService.getAccessToken();
+          token = TokenService.getAccessToken();
       }
       
       // Make request with explicit authorization header
@@ -1648,18 +1629,18 @@ export const teacherApi = {
         
         try {
           await authApi.refreshToken(TokenService.getRefreshToken() || '');
-          const newToken = TokenService.getAccessToken();
-          
-          if (newToken) {
-            console.log('deleteTeacher: Retrying after token refresh');
-            const retryResponse = await axios.delete(`${API_URL}/teachers/${id}/`, {
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              },
-              withCredentials: true
-            });
-            return retryResponse.data;
+            const newToken = TokenService.getAccessToken();
+            
+            if (newToken) {
+              console.log('deleteTeacher: Retrying after token refresh');
+              const retryResponse = await axios.delete(`${API_URL}/teachers/${id}/`, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json'
+                },
+                withCredentials: true
+              });
+              return retryResponse.data;
           }
         } catch (refreshError) {
           console.error('deleteTeacher: Retry failed after token refresh', refreshError);
@@ -1761,31 +1742,21 @@ export const teacherApi = {
         console.error('bulkDeleteTeachers: CRITICAL - No usable token found after all attempts');
       }
       
-      console.log('bulkDeleteTeachers: Final authorization header:', 
-                 authHeader ? `${authHeader.substring(0, 15)}...` : 'EMPTY');
       
       // Make request with explicit authorization header
       const response = await axios.post(`${API_URL}/teachers/bulk_delete/`, { ids }, {
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
-        },
-        withCredentials: true
-      });
-      
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/json'
+            },
+            withCredentials: true
+          });
+          
       return response.data;
     } catch (error: any) {
       // Special handling for 401 Unauthorized error
       if (error.response?.status === 401) {
         console.error('bulkDeleteTeachers: 401 Unauthorized error, attempting auth refresh');
-        console.error('bulkDeleteTeachers: Request details:', {
-          url: error.config?.url,
-          headers: error.config?.headers,
-          hasAuthHeader: !!error.config?.headers?.Authorization,
-          authHeader: error.config?.headers?.Authorization 
-                      ? `${error.config.headers.Authorization.substring(0, 15)}...` 
-                      : 'EMPTY'
-        });
         
         // Try to get a fresh token through cookies exchange
         try {
@@ -2001,4 +1972,4 @@ export const checkTokenAndRefreshIfNeeded = async () => {
     console.error('checkTokenAndRefreshIfNeeded: Unexpected error:', error);
     return false;
   }
-}; 
+};

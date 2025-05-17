@@ -1,19 +1,14 @@
 'use client';
 
-import { useState } from 'react';
 import { 
   NavLink, 
   Stack,
-  Text,
-  Box
 } from '@mantine/core';
 import { 
   IconHome, 
   IconUsers, 
   IconSchool, 
-  IconSettings, 
-  IconReportAnalytics,
-  IconUserCircle
+  IconClockCheck
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -37,18 +32,7 @@ export default function Sidebar() {
     { icon: IconHome, label: 'Trang chủ', href: '/dashboard' },
     { icon: IconSchool, label: 'Học sinh', href: '/dashboard/students' },
     { icon: IconUsers, label: 'Giáo viên', href: '/dashboard/teachers' },
-    { 
-      icon: IconReportAnalytics, 
-      label: 'Báo cáo', 
-      href: '/dashboard/reports', 
-      requiredRoles: ['admin'] 
-    },
-    { 
-      icon: IconSettings, 
-      label: 'Cài đặt hệ thống', 
-      href: '/dashboard/settings', 
-      requiredRoles: ['admin'] 
-    },
+    { icon: IconClockCheck, label: 'Chấm công GV', href: '/dashboard/attendance' },
   ];
 
   const filteredNavItems = navItems.filter(item => {
@@ -74,6 +58,8 @@ export default function Sidebar() {
           leftSection={<item.icon size="1rem" stroke={1.5} />}
           active={pathname === item.href}
           variant="light"
+          className="mantine-hover-card font-bold"
+          prefetch
         />
       ))}
     </Stack>

@@ -1,15 +1,11 @@
+import App from './App';
 import type { Metadata } from 'next';
-import dynamic from 'next/dynamic';
-import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css';
-import '../styles/globals.css';
-
-// Dynamic import to avoid server component issues
-const App = dynamic(() => import('./App'), { ssr: true });
+import './globals.css';
+import AppLayout from '@/components/layout/AppLayout';
 
 export const metadata: Metadata = {
-  title: 'MẦM NON ĐỘC LẬP MONKIDS',
-  description: 'Hệ thống quản lý học sinh và giáo viên',
+  title: 'Monkids Management System',
+  description: 'Student and Teacher Management System',
 };
 
 export default function RootLayout({
@@ -18,12 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
-      <head>
-        <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, user-scalable=no" />
-      </head>
+    <html lang="en">
       <body>
-        <App>{children}</App>
+        <App>
+          <AppLayout>
+            {children}
+          </AppLayout>
+        </App>
       </body>
     </html>
   );

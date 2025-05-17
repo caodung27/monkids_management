@@ -22,9 +22,9 @@ export default function DashboardLayout({
   
   const toggleNav = () => setOpened((o) => !o);
 
-  // Phát hiện và chặn các redirect không mong muốn
+  // Detect and block unwanted redirects
   useEffect(() => {
-    // Cơ chế chặn redirect
+    // Redirect blocking mechanism
     const preventUnwantedRedirect = () => {
       if (redirectBlocker.current) return;
       
@@ -35,16 +35,16 @@ export default function DashboardLayout({
         document.cookie.includes('auth_redirect=true')
       );
       
-      // Chặn redirect trong 5 giây sau khi đăng nhập OAuth
+      // Block redirects for 5 seconds after OAuth login
       if (isRecentOAuth) {
         console.log('Dashboard: Blocking unwanted redirects for 5 seconds');
         redirectBlocker.current = true;
         
-        // Đặt cờ vào localStorage để chặn redirect trên trang mới
+        // Set flag in localStorage to block redirects on new page
         localStorage.setItem('block_auth_redirect', 'true');
         localStorage.setItem('block_until', (Date.now() + 5000).toString());
         
-        // Khôi phục sau 5 giây
+        // Restore after 5 seconds
         setTimeout(() => {
           redirectBlocker.current = false;
           localStorage.removeItem('block_auth_redirect');
@@ -52,7 +52,7 @@ export default function DashboardLayout({
       }
     };
     
-    // Chạy ngay và sau mỗi lần trang tải xong
+    // Run immediately and after each page load
     preventUnwantedRedirect();
     window.addEventListener('load', preventUnwantedRedirect);
     
@@ -152,7 +152,7 @@ export default function DashboardLayout({
     setLoading(false);
     setHasCheckedStorage(true);
     
-    // Set cờ chặn redirects
+    // Set flag to block redirects
     localStorage.setItem('block_auth_redirect', 'true');
     localStorage.setItem('block_until', (Date.now() + 10000).toString());
   };
@@ -162,13 +162,12 @@ export default function DashboardLayout({
       <Center style={{ height: '100vh' }}>
         <div style={{ textAlign: 'center' }}>
           <Loader size="xl" />
-          <Text mt="md">Đang tải trang...</Text>
           <Button 
             onClick={handleManualContinue} 
             style={{ marginTop: '20px' }}
             variant="light"
           >
-            Tiếp tục vào trang chính
+            Tiếp tục tới trang chủ
           </Button>
         </div>
       </Center>
