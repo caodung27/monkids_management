@@ -2,12 +2,12 @@
 
 import { useState, useRef } from 'react';
 import { Container, Title, Table, TextInput, Group, Button, ActionIcon, Menu, Text, Badge, Select, Checkbox, Modal, ScrollArea, Box } from '@mantine/core';
-import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconPrinter } from '@tabler/icons-react';
+import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconPrinter, IconFileExport } from '@tabler/icons-react';
 import Link from 'next/link';
 import { useTeachers, useDeleteTeacher } from '@/api/hooks/useTeachers';
 import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
-import { teacherApi } from '@/api/apiService';
+import { teacherApi, exportApi } from '@/api/apiService';
 import { useQueryClient } from '@tanstack/react-query';
 
 // Simple formatter for Vietnamese currency
@@ -53,6 +53,10 @@ export default function TeachersPage() {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Add state for selected teachers
+  const [selectedTeachers, setSelectedTeachers] = useState<Record<string, boolean>>({});
+  const [exporting, setExporting] = useState(false);
 
   const handleDeleteTeacher = async (id: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa giáo viên này không?')) {
@@ -131,6 +135,45 @@ export default function TeachersPage() {
   const allSelected = filteredTeachers.length > 0 && 
     filteredTeachers.every(teacher => selectedRows.includes(teacher.id));
 
+  // Add handler for bulk export
+  const handleBulkExport = async () => {
+    const selectedIds = Object.entries(selectedTeachers)
+      .filter(([_, selected]) => selected)
+      .map(([id]) => id);
+
+    if (selectedIds.length === 0) {
+      notifications.show({
+        title: 'Chú ý',
+        message: 'Vui lòng chọn ít nhất một giáo viên để xuất phiếu lương',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const data = await exportApi.bulkExport('teacher', selectedIds);
+      if (data.success) {
+        notifications.show({
+          title: 'Thành công',
+          message: 'Đã xuất phiếu lương thành công',
+          color: 'green',
+        });
+      } else {
+        throw new Error(data.message || 'Có lỗi xảy ra');
+      }
+    } catch (error: any) {
+      console.error('Export bulk error:', error);
+      notifications.show({
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra khi xuất phiếu lương',
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Container size="lg" mt="md">
       <Group justify="space-between" mb="md">
@@ -149,6 +192,16 @@ export default function TeachersPage() {
               Thêm giáo viên
             </Button>
           </Link>
+          <Group>
+            <Button
+              leftSection={<IconFileExport size={16} />}
+              onClick={handleBulkExport}
+              loading={exporting}
+              disabled={Object.values(selectedTeachers).filter(Boolean).length === 0}
+            >
+              Xuất phiếu lương
+            </Button>
+          </Group>
         </Group>
       </Group>
 
@@ -203,11 +256,19 @@ export default function TeachersPage() {
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th style={{ width: 40 }}>
-                  <Checkbox 
-                    checked={allSelected} 
-                    indeterminate={selectedRows.length > 0 && !allSelected}
-                    onChange={(event) => handleSelectAll(event.currentTarget.checked)} 
+                <Table.Th style={{ width: 60 }}>
+                  <Checkbox
+                    checked={filteredTeachers.length > 0 && filteredTeachers.every(teacher => selectedTeachers[teacher.id])}
+                    indeterminate={filteredTeachers.some(teacher => selectedTeachers[teacher.id]) && !filteredTeachers.every(teacher => selectedTeachers[teacher.id])}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      const newSelected: Record<string, boolean> = { ...selectedTeachers };
+                      filteredTeachers.forEach((teacher) => {
+                        newSelected[teacher.id] = checked;
+                      });
+                      setSelectedTeachers(newSelected);
+                      setSelectedRows(checked ? filteredTeachers.map(t => t.id) : []);
+                    }}
                   />
                 </Table.Th>
                 <Table.Th style={{ minWidth: 100 }}>Mã số</Table.Th>
@@ -243,9 +304,18 @@ export default function TeachersPage() {
                     bg={selectedRows.includes(teacher.id) ? "var(--mantine-color-blue-light)" : undefined}
                   >
                     <Table.Td>
-                      <Checkbox 
-                        checked={selectedRows.includes(teacher.id)}
-                        onChange={(event) => handleSelectRow(teacher.id, event.currentTarget.checked)}
+                      <Checkbox
+                        checked={!!selectedTeachers[teacher.id]}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setSelectedTeachers((prev) => ({
+                            ...prev,
+                            [teacher.id]: checked,
+                          }));
+                          setSelectedRows((prev) =>
+                            checked ? [...prev, teacher.id] : prev.filter((id) => id !== teacher.id)
+                          );
+                        }}
                       />
                     </Table.Td>
                     <Table.Td>{teacher.teacher_no}</Table.Td>

@@ -67,10 +67,27 @@ export class TeachersService implements ITeachersService {
     const newTeacherNo = total + 1;
 
     const teacher = this.teacherRepository.create({
-      ...createTeacherDto,
       id: uuidv4(),
       teacher_no: newTeacherNo,
+      name: createTeacherDto.name,
+      role: createTeacherDto.role,
+      phone: createTeacherDto.phone,
+      base_salary: createTeacherDto.base_salary || 0,
+      teaching_days: createTeacherDto.teaching_days || 0,
+      absence_days: createTeacherDto.absence_days || 0,
+      received_salary: createTeacherDto.received_salary || 0,
+      extra_teaching_days: createTeacherDto.extra_teaching_days || 0,
+      extra_salary: createTeacherDto.extra_salary || 0,
+      insurance_support: createTeacherDto.insurance_support || 0,
+      responsibility_support: createTeacherDto.responsibility_support || 0,
+      breakfast_support: createTeacherDto.breakfast_support || 0,
+      english_salary: createTeacherDto.english_salary || 0,
+      skill_salary: createTeacherDto.skill_salary || 0,
+      new_students_list: createTeacherDto.new_students_list ? parseFloat(createTeacherDto.new_students_list) : 0,
+      total_salary: createTeacherDto.total_salary || 0,
+      note: createTeacherDto.note
     });
+
     return this.teacherRepository.save(teacher);
   }
 

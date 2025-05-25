@@ -140,8 +140,14 @@ export class Teacher {
   })
   english_salary: number;
 
-  @Column({ name: 'new_students_list', type: 'text', nullable: true })
-  new_students_list?: string;
+  @Column({
+    name: 'new_students_list',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  new_students_list: number;
 
   @Column({
     name: 'paid_amount',

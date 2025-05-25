@@ -101,3 +101,5 @@ $RECYCLE.BIN/
 **/Thumbs.db
 **/ehthumbs.db
 **/Desktop.ini 
+
+/backend/MONKIDS_T*_*

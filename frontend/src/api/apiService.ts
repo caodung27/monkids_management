@@ -423,4 +423,17 @@ export const attendanceApi = {
   },
 
   // Add other API calls related to attendance here
+};
+
+// Export API
+export const exportApi = {
+  bulkExport: async (type: 'student' | 'teacher', ids: string[]) => {
+    try {
+      const response = await apiClient.post('/export/bulk', { type, ids });
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  }
 }; 

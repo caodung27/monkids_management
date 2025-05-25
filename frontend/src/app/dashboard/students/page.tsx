@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Container, Title, Table, TextInput, Group, Button, ActionIcon, Menu, Text, Badge, Select, Checkbox, Modal, ScrollArea, Box } from '@mantine/core';
-import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconPrinter } from '@tabler/icons-react';
+import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconPrinter, IconFileExport } from '@tabler/icons-react';
 import Link from 'next/link';
-import { studentApi } from '@/api/apiService';
+import { studentApi, exportApi } from '@/api/apiService';
 import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
 
@@ -24,6 +24,7 @@ export default function StudentsPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchStudents = async (page: number, pageSize: number = itemsPerPage) => {
     setLoading(true);
@@ -140,6 +141,38 @@ export default function StudentsPage() {
   const allSelected = filteredStudents.length > 0 && 
     filteredStudents.every(student => selectedRows.includes(student.sequential_number));
 
+  const handleBulkExport = async () => {
+    if (selectedRows.length === 0) {
+      notifications.show({
+        title: 'Chú ý',
+        message: 'Vui lòng chọn ít nhất một học sinh để xuất biên lai',
+        color: 'yellow',
+      });
+      return;
+    }
+    setExporting(true);
+    try {
+      const data = await exportApi.bulkExport('student', selectedRows);
+      if (data.success) {
+        notifications.show({
+          title: 'Thành công',
+          message: 'Đã xuất biên lai thành công',
+          color: 'green',
+        });
+      } else {
+        throw new Error(data.message || 'Có lỗi xảy ra');
+      }
+    } catch (error: any) {
+      notifications.show({
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra khi xuất biên lai',
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Container size="lg" mt="md">
       <Group justify="space-between" mb="md">
@@ -158,6 +191,14 @@ export default function StudentsPage() {
               Thêm học sinh
             </Button>
           </Link>
+          <Button
+            leftSection={<IconFileExport size={16} />}
+            onClick={handleBulkExport}
+            loading={exporting}
+            disabled={selectedRows.length === 0}
+          >
+            Xuất biên lai
+          </Button>
         </Group>
       </Group>
 
@@ -250,9 +291,12 @@ export default function StudentsPage() {
                     bg={selectedRows.includes(student.sequential_number) ? "var(--mantine-color-blue-light)" : undefined}
                   >
                     <Table.Td>
-                      <Checkbox 
+                      <Checkbox
                         checked={selectedRows.includes(student.sequential_number)}
-                        onChange={(event) => handleSelectRow(student.sequential_number, event.currentTarget.checked)}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          handleSelectRow(student.sequential_number, checked);
+                        }}
                       />
                     </Table.Td>
                     <Table.Td>{student.student_id}</Table.Td>

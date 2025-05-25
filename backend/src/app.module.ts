@@ -13,6 +13,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { StatsModule } from './modules/stats.module';
 import { CronService } from './services/cron.service';
+import { ExportModule } from './export/export.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { CronService } from './services/cron.service';
     AuthModule,
     StatsModule,
     AttendanceModule,
+    ExportModule,
   ],
   controllers: [AppController],
   providers: [AppService, CronService],

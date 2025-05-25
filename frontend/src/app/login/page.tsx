@@ -191,7 +191,7 @@ export default function LoginPage() {
         <Divider label="Hoặc tiếp tục với" labelPosition="center" my="lg" />
 
         {/* Google login button - now navigates to backend */}
-        <Button
+        {/* <Button
           fullWidth
           variant="outline"
           leftSection={<IconBrandGoogle />}
@@ -199,7 +199,7 @@ export default function LoginPage() {
           mb="md"
         >
           Đăng nhập với Google
-        </Button>
+        </Button> */}
 
         <Text ta="center" mt="md">
           Chưa có tài khoản?{' '}
