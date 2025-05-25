@@ -19,7 +19,8 @@ import { useForm, zodResolver } from '@mantine/form';
 import { z } from 'zod';
 import { IconBrandGoogle } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { TokenService } from '@/api/apiService';
+import { authApi, TokenService } from '@/api/apiService';
+import { notifications } from '@mantine/notifications';
 
 // Form validation schema
 const schema = z.object({
@@ -36,25 +37,30 @@ export default function LoginPage() {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   // Redirect if already authenticated
   useEffect(() => {
-    // Check for any authentication flags or tokens
-    const hasTokens = TokenService.hasAnyToken();
-    const hasAuthFlags = typeof window !== 'undefined' && (
-      localStorage.getItem('auth_successful') === 'true' ||
-      sessionStorage.getItem('auth_successful') === 'true' ||
-      localStorage.getItem('block_auth_redirect') === 'true'
-    );
-    
-    // Log authentication state
-    console.log('Login page: Authentication check', { hasTokens, hasAuthFlags });
-    
-    // If already authenticated, redirect to dashboard
-    if (hasTokens || hasAuthFlags) {
-      console.log('Login page: User appears to be authenticated, redirecting to dashboard');
-      router.replace('/dashboard');
-    }
+    const checkAuth = async () => {
+      try {
+        // Check for tokens
+        const hasToken = TokenService.checkTokensExist();
+        
+        if (hasToken) {
+          // If we have tokens, redirect to dashboard
+          router.replace('/dashboard');
+          return;
+        }
+        
+        // No tokens, allow login
+        setIsChecking(false);
+      } catch (error) {
+        console.error('Login page: Error checking auth:', error);
+        setIsChecking(false);
+      }
+    };
+
+    checkAuth();
   }, [router]);
 
   // Form setup
@@ -70,10 +76,43 @@ export default function LoginPage() {
   const handleSubmit = async (values: { email: string; password: string }) => {
     try {
       setIsSubmitting(true);
-      await login(values.email, values.password);
-    } catch (error) {
+      console.log('Login: Attempting login with email:', values.email);
+      
+      const response = await authApi.login(values.email, values.password);
+      console.log('Login: Login response:', response);
+      
+      if (response && response.access_token) {
+        console.log('Login: Login successful, saving tokens');
+        
+        // Save tokens
+        TokenService.setAccessToken(response.access_token);
+        
+        // Set auth flags
+        localStorage.setItem('auth_successful', 'true');
+        sessionStorage.setItem('auth_successful', 'true');
+        
+        // Show success notification
+        notifications.show({
+          title: 'Thành công',
+          message: 'Đăng nhập thành công',
+          color: 'green',
+        });
+        
+        // Force a small delay to ensure tokens are saved
+        setTimeout(() => {
+          console.log('Login: Executing redirect to dashboard');
+          window.location.href = '/dashboard';
+        }, 500);
+      } else {
+        throw new Error('Không nhận được token từ server');
+      }
+    } catch (error: any) {
       console.error('Login error:', error);
-      // Error notifications are handled in the AuthContext
+      notifications.show({
+        title: 'Lỗi',
+        message: error.message || 'Đăng nhập thất bại',
+        color: 'red',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -90,12 +129,10 @@ export default function LoginPage() {
       }
       
       // Build the Google OAuth URL with proper parameters
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL ? 
-        process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') : 
-        'http://localhost:8000';
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
       
-      // Use the standard OAuth path with redirect preference
-      const authUrl = `${backendUrl}/oauth/login/google-oauth2/?redirect_to=dashboard`;
+      // Use the standard OAuth path
+      const authUrl = `${backendUrl}/auth/google`;
       
       console.log('Login: Initiating Google OAuth login', { authUrl });
       
@@ -107,9 +144,7 @@ export default function LoginPage() {
     }
   };
 
-  const isLoading = authLoading;
-
-  if (isLoading) {
+  if (isChecking) {
     return (
       <Container size="xs" my="xl">
         <Center mt="xl">
@@ -156,7 +191,7 @@ export default function LoginPage() {
         <Divider label="Hoặc tiếp tục với" labelPosition="center" my="lg" />
 
         {/* Google login button - now navigates to backend */}
-        <Button
+        {/* <Button
           fullWidth
           variant="outline"
           leftSection={<IconBrandGoogle />}
@@ -164,7 +199,7 @@ export default function LoginPage() {
           mb="md"
         >
           Đăng nhập với Google
-        </Button>
+        </Button> */}
 
         <Text ta="center" mt="md">
           Chưa có tài khoản?{' '}

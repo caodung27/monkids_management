@@ -1,19 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Container, Paper, Title, Text, Divider, Table, Button, Grid, Group, Badge } from '@mantine/core';
+import { Container, Paper, Title, Text, Table, Button, Grid, Group, Box } from '@mantine/core';
 import { useParams } from 'next/navigation';
-import { IconPrinter } from '@tabler/icons-react';
+import { IconPrinter, IconArrowLeft } from '@tabler/icons-react';
 import { useReactToPrint } from 'react-to-print';
-import { Student } from '@/types';
-import { studentApi } from '@/api/apiService';
 import { formatVND } from '@/utils/formatters';
+import { notifications } from '@mantine/notifications';
+import Link from 'next/link';
+import { useStudent } from '@/api/hooks/useStudents';
 
 export default function StudentReceipt() {
   const params = useParams();
   const studentId = params.id as string;
-  const [student, setStudent] = useState<Student | null>(null);
-  const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState('');
   const [nextMonthYear, setNextMonthYear] = useState('');
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -21,6 +20,9 @@ export default function StudentReceipt() {
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
   });
+
+  // Use the custom hook to fetch student data
+  const { data: student, isLoading, error } = useStudent(studentId);
 
   useEffect(() => {
     // Set current date for receipt
@@ -35,23 +37,9 @@ export default function StudentReceipt() {
     const displayMonth = nextMonth > 12 ? nextMonth - 12 : nextMonth;
     const displayYear = nextMonth > 12 ? year + 1 : year;
     setNextMonthYear(`Tháng ${displayMonth} Năm ${displayYear}`);
+  }, []);
 
-    // Fetch student data
-    const fetchStudent = async () => {
-      try {
-        const data = await studentApi.getStudentById(studentId);
-        setStudent(data);
-      } catch (error) {
-        console.error('Error fetching student:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStudent();
-  }, [studentId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Container size="lg" mt="md">
         <Text>Đang tải...</Text>
@@ -59,10 +47,17 @@ export default function StudentReceipt() {
     );
   }
 
-  if (!student) {
+  if (error || !student) {
     return (
       <Container size="lg" mt="md">
-        <Text>Không tìm thấy thông tin học sinh</Text>
+        <Group>
+          <Link href="/dashboard/students" style={{ textDecoration: 'none' }}>
+            <Button variant="subtle" leftSection={<IconArrowLeft size={16} />}>
+              Quay lại
+            </Button>
+          </Link>
+          <Text>Không tìm thấy thông tin học sinh</Text>
+        </Group>
       </Container>
     );
   }
@@ -102,29 +97,40 @@ export default function StudentReceipt() {
               top: 0;
               width: 100%;
               margin: 0;
-              padding: 10px; /* Adjust padding for print */
-              font-size: 10px; /* Smaller base font for print */
+              padding: 10px;
+              font-size: 10px;
             }
             .no-print {
               display: none !important;
             }
+            .printable-receipt table,
+            .printable-receipt th,
+            .printable-receipt td,
+            .printable-receipt thead,
+            .printable-receipt tbody,
+            .printable-receipt tr {
+              border: 1px solid black !important;
+              border-collapse: collapse !important;
+            }
             .printable-receipt .mantine-Table-th,
             .printable-receipt .mantine-Table-td {
-              padding: 4px 8px; /* Reduced padding for table cells */
-              font-size: 9px; /* Smaller font for table content */
+              padding: 4px 8px;
+              font-size: 9px;
+              border: 1px solid black !important;
+              border-collapse: collapse !important;
             }
             .printable-receipt .mantine-Title {
-              font-size: 14px !important; /* Smaller title font */
+              font-size: 14px !important;
               margin-bottom: 8px !important;
             }
-             .printable-receipt .mantine-Text {
-              font-size: 9px !important; /* Smaller text font */
-              margin-bottom: 4px !important; /* Reduced bottom margin for Text */
+            .printable-receipt .mantine-Text {
+              font-size: 9px !important;
+              margin-bottom: 4px !important;
             }
             .qr-code-container img {
-                width: 250px !important; /* Smaller QR code */
-                height: auto !important;
-                margin: 15px 0 !important;
+              width: 250px !important;
+              height: auto !important;
+              margin: 15px 0 !important;
             }
           }
         `}</style>

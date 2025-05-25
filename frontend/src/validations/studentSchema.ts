@@ -33,25 +33,25 @@ export const studentSchema = z.object({
 
 export type StudentFormValues = z.infer<typeof studentSchema>;
 
-// Schema for API payload
+// Schema for API payload - keep all numeric fields as numbers
 export const studentApiSchema = studentSchema.extend({
   birthdate: z.date().nullable().transform(date => 
     date ? date.toISOString().split('T')[0] : null
   ),
-  // Transform all number fields to strings for API
-  base_fee: z.number().transform(val => String(val)),
-  final_fee: z.number().transform(val => String(val)),
-  utilities_fee: z.number().transform(val => String(val)),
-  pt: z.number().transform(val => String(val)),
-  pm: z.number().transform(val => String(val)),
-  meal_fee: z.number().transform(val => String(val)),
-  eng_fee: z.number().transform(val => String(val)),
-  skill_fee: z.number().transform(val => String(val)),
-  student_fund: z.number().transform(val => String(val)),
-  facility_fee: z.number().transform(val => String(val)),
-  total_fee: z.number().transform(val => String(val)),
-  paid_amount: z.number().transform(val => String(val)),
-  remaining_amount: z.number().transform(val => String(val)),
+  // Keep all number fields as numbers
+  base_fee: z.number(),
+  final_fee: z.number(),
+  utilities_fee: z.number(),
+  pt: z.number(),
+  pm: z.number(),
+  meal_fee: z.number(),
+  eng_fee: z.number(),
+  skill_fee: z.number(),
+  student_fund: z.number(),
+  facility_fee: z.number(),
+  total_fee: z.number(),
+  paid_amount: z.number(),
+  remaining_amount: z.number(),
 });
 
 export type StudentApiPayload = z.infer<typeof studentApiSchema>; 

@@ -43,7 +43,7 @@ export default function EditStudentPage() {
   useEffect(() => {
     const fetchStudentData = async () => {
       try {
-        const student: Student = await studentApi.getStudentById(idFromParams);
+        const student: Student = await studentApi.getStudent(idFromParams);
         studentSequentialNumberRef.current = student.sequential_number;
 
         form.setValues({
@@ -68,6 +68,11 @@ export default function EditStudentPage() {
         });
       } catch (error) {
         console.error('Failed to fetch student:', error);
+        notifications.show({
+          title: 'Lỗi',
+          message: 'Không thể tải thông tin học sinh. Vui lòng thử lại sau.',
+          color: 'red',
+        });
       } finally {
         setLoading(false);
       }
@@ -122,34 +127,44 @@ export default function EditStudentPage() {
     form.values.student_fund, form.values.facility_fee, form.values.paid_amount
   ]);
 
-  const handleSubmit = async (values: StudentEditFormValues) => { // values are now from form state
+  const handleSubmit = async (values: StudentEditFormValues) => {
     try {
       if (!studentSequentialNumberRef.current) {
         console.error('Sequential number not found, cannot update.');
-        alert('Lỗi: Không tìm thấy mã học sinh duy nhất.');
+        notifications.show({
+          title: 'Lỗi',
+          message: 'Không tìm thấy mã học sinh duy nhất.',
+          color: 'red',
+        });
         return;
       }
+
+      // Calculate final fee
+      const baseFee = Number(values.base_fee || 0);
+      const discountPercentage = Number(values.discount_percentage) || 0;
+      const finalFee = Math.round(baseFee * (1 - discountPercentage));
+
       const apiPayload: StudentApiUpdatePayload = {
         name: values.name,
         classroom: values.classroom,
         birthdate: values.birthdate ? values.birthdate.toISOString().split('T')[0] : null,
-        base_fee: String(values.base_fee || 0),
-        // Keep discount_percentage as a number for API
-        // Ensure it's a valid number
-        discount_percentage: Number(values.discount_percentage) || 0,
-        final_fee: String(values.final_fee || 0),
-        utilities_fee: String(values.utilities_fee || 0),
-        pt: String(values.pt || 0),
-        pm: String(values.pm || 0),
-        meal_fee: String(values.meal_fee || 0),
-        eng_fee: String(values.eng_fee || 0),
-        skill_fee: String(values.skill_fee || 0),
-        student_fund: String(values.student_fund || 0),
-        facility_fee: String(values.facility_fee || 0),
-        paid_amount: String(values.paid_amount || 0),
-        total_fee: String(values.total_fee || 0),
-        remaining_amount: String(values.remaining_amount || 0),
+        base_fee: baseFee,
+        discount_percentage: discountPercentage,
+        final_fee: finalFee,
+        utilities_fee: Number(values.utilities_fee || 0),
+        pt: Number(values.pt || 0),
+        pm: Number(values.pm || 0),
+        meal_fee: Number(values.meal_fee || 0),
+        eng_fee: Number(values.eng_fee || 0),
+        skill_fee: Number(values.skill_fee || 0),
+        student_fund: Number(values.student_fund || 0),
+        facility_fee: Number(values.facility_fee || 0),
+        paid_amount: Number(values.paid_amount || 0),
+        total_fee: Number(values.total_fee || 0),
+        remaining_amount: Number(values.remaining_amount || 0),
       };
+
+      // Use sequential_number instead of UUID for update
       await studentApi.updateStudent(studentSequentialNumberRef.current, apiPayload);
       notifications.show({
         title: 'Thành công',
@@ -157,11 +172,33 @@ export default function EditStudentPage() {
         color: 'green',
       });
       router.push('/dashboard/students');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving student:', error);
+      
+      // Check for authentication errors (401)
+      if (error.response && error.response.status === 401) {
+        notifications.show({
+          title: 'Lỗi xác thực',
+          message: 'Bạn cần đăng nhập lại để thực hiện thao tác này.',
+          color: 'red',
+        });
+        return;
+      }
+      
+      // Permission error (403)
+      if (error.response && error.response.status === 403) {
+        notifications.show({
+          title: 'Không có quyền',
+          message: 'Bạn không có quyền cập nhật thông tin học sinh.',
+          color: 'red',
+        });
+        return;
+      }
+      
+      // Other errors
       notifications.show({
         title: 'Lỗi',
-        message: 'Có lỗi khi lưu thông tin học sinh. Vui lòng thử lại sau.',
+        message: `Có lỗi xảy ra khi cập nhật thông tin học sinh: ${error.response?.data?.detail || 'Vui lòng thử lại.'}`,
         color: 'red',
       });
     }
@@ -357,7 +394,7 @@ export default function EditStudentPage() {
                 label="Phiếu tồn"
                 placeholder="Nhập số phiếu tồn"
                 {...form.getInputProps('pt')}
-                decimalScale={0}
+                decimalScale={1}
                 min={0}
                 onKeyDown={handleKeyDown}
               />
@@ -367,7 +404,7 @@ export default function EditStudentPage() {
                 label="Phiếu mới"
                 placeholder="Nhập số phiếu mới"
                 {...form.getInputProps('pm')}
-                decimalScale={0}
+                decimalScale={1}
                 min={0}
                 onKeyDown={handleKeyDown}
               />

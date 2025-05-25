@@ -1,108 +1,101 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Container, Title, Table, TextInput, Group, Button, ActionIcon, Menu, Badge, Text, Select, Checkbox, Modal } from '@mantine/core';
-import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconPrinter, IconEye } from '@tabler/icons-react';
+import { useState, useRef } from 'react';
+import { Container, Title, Table, TextInput, Group, Button, ActionIcon, Menu, Text, Badge, Select, Checkbox, Modal, ScrollArea, Box } from '@mantine/core';
+import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconPrinter, IconFileExport } from '@tabler/icons-react';
 import Link from 'next/link';
-import { teacherApi } from '@/api/apiService';
-import { formatVND } from '@/utils/formatters';
-import { Teacher } from '@/types';
-import { notifications } from '@mantine/notifications';
+import { useTeachers, useDeleteTeacher } from '@/api/hooks/useTeachers';
 import { Pagination } from '@/components/Pagination';
+import { notifications } from '@mantine/notifications';
+import { teacherApi, exportApi } from '@/api/apiService';
+import { useQueryClient } from '@tanstack/react-query';
+
+// Simple formatter for Vietnamese currency
+const formatVND = (value: string | number) => {
+  return Number(value).toLocaleString('vi-VN') + ' đ';
+};
+
+interface RoleOption {
+  value: string;
+  label: string;
+  color: string;
+}
+
+const ROLE_OPTIONS: RoleOption[] = [
+  { value: 'Quản lý', label: 'Quản lý', color: 'blue' },
+  { value: 'Giáo viên', label: 'Giáo viên', color: 'green' },
+  { value: 'Đầu bếp', label: 'Đầu bếp', color: 'orange' },
+];
+
+const getRoleColor = (role: string) => {
+  const roleOption = ROLE_OPTIONS.find(opt => opt.value === role);
+  return roleOption?.color || 'gray';
+};
 
 export default function TeachersPage() {
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const queryClient = useQueryClient();
+  const {
+    teachers,
+    loading,
+    currentPage,
+    totalTeachers,
+    itemsPerPage,
+    totalPages,
+    handlePageChange,
+    handlePageSizeChange,
+    fetchTeachers
+  } = useTeachers();
+
+  const deleteTeacherMutation = useDeleteTeacher(queryClient);
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalTeachers, setTotalTeachers] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
 
-  const fetchTeachers = async (page: number, pageSize: number = itemsPerPage) => {
-    setLoading(true);
-    try {
-      const data = await teacherApi.getAllTeachers(page, pageSize);
-      console.log('Fetched teachers data:', data);
-      
-      if (data && typeof data === 'object') {
-        setTeachers(data.results || []);
-        setTotalTeachers(data.count || 0);
-        setCurrentPage(page);
-        setTotalPages(Math.ceil((data.count || 0) / pageSize));
-        // Clear selection when fetching new data
-        setSelectedRows([]);
-      } else {
-        console.error('Unexpected API response format:', data);
-        setTeachers([]);
-      }
-    } catch (error) {
-      console.error('Error fetching teachers:', error);
-      setTeachers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchTeachers(1, itemsPerPage);
-  }, [itemsPerPage]);
+  // Add state for selected teachers
+  const [selectedTeachers, setSelectedTeachers] = useState<Record<string, boolean>>({});
+  const [exporting, setExporting] = useState(false);
 
-  const handlePageChange = (page: number) => {
-    fetchTeachers(page, itemsPerPage);
-    window.scrollTo(0, 0); // Scroll to top when changing page
-  };
-
-  const handlePageSizeChange = (value: string | null) => {
-    if (value) {
-      const newSize = parseInt(value);
-      setItemsPerPage(newSize);
-      setCurrentPage(1); // Reset to first page when changing page size
-    }
-  };
-
-  const handleDelete = async (teacherId: string) => {
+  const handleDeleteTeacher = async (id: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa giáo viên này không?')) {
       try {
-        await teacherApi.deleteTeacher(teacherId);
-        setTeachers(prevTeachers => prevTeachers.filter(teacher => teacher.id !== teacherId));
+        await deleteTeacherMutation.mutateAsync(id);
         notifications.show({
           title: 'Thành công',
-          message: 'Giáo viên đã được xóa thành công!',
+          message: 'Đã xóa giáo viên thành công',
           color: 'green',
         });
+        // Refresh the teachers list after deletion
+        fetchTeachers(currentPage, itemsPerPage);
       } catch (error) {
         console.error('Error deleting teacher:', error);
         notifications.show({
           title: 'Lỗi',
-          message: 'Có lỗi xảy ra khi xóa giáo viên. Vui lòng thử lại.',
+          message: 'Có lỗi xảy ra khi xóa giáo viên',
           color: 'red',
         });
       }
     }
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     setIsConfirmDeleteOpen(true);
   };
 
   const confirmDeleteSelected = async () => {
     try {
-      // Use the new bulk delete API endpoint
       const result = await teacherApi.bulkDeleteTeachers(selectedRows);
-      
-      // Update the list and clear selection
-      setTeachers(prevTeachers => 
-        prevTeachers.filter(teacher => !selectedRows.includes(teacher.id!))
-      );
       setSelectedRows([]);
       setIsConfirmDeleteOpen(false);
       
+      // Refresh the teachers list after bulk deletion
+      fetchTeachers(currentPage, itemsPerPage);
+      
       notifications.show({
         title: 'Thành công',
-        message: `Đã xóa ${result.deleted} giáo viên`,
+        message: `Đã xóa ${selectedRows.length} giáo viên`,
         color: 'green',
       });
     } catch (error) {
@@ -115,33 +108,71 @@ export default function TeachersPage() {
     }
   };
 
-  const handleSelectRow = (teacherId: string, checked: boolean) => {
+  const handleSelectRow = (id: string, checked: boolean) => {
     if (checked) {
-      setSelectedRows(prev => [...prev, teacherId]);
+      setSelectedRows(prev => [...prev, id]);
     } else {
-      setSelectedRows(prev => prev.filter(id => id !== teacherId));
+      setSelectedRows(prev => prev.filter(rowId => rowId !== id));
     }
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allIds = filteredTeachers.map(teacher => teacher.id!);
+      const allIds = teachers.map(teacher => teacher.id);
       setSelectedRows(allIds);
     } else {
       setSelectedRows([]);
     }
   };
 
-  const filteredTeachers = Array.isArray(teachers) 
-    ? teachers.filter(teacher => 
-        teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        teacher.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (teacher.phone && teacher.phone.includes(searchTerm))
-      ) 
-    : [];
+  // Filter teachers based on search term
+  const filteredTeachers = teachers.filter(teacher => 
+    teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) 
+      || teacher.role?.toLowerCase().includes(searchTerm.toLowerCase()) 
+      || String(teacher.teacher_no).includes(searchTerm)
+  );
 
   const allSelected = filteredTeachers.length > 0 && 
-    filteredTeachers.every(teacher => selectedRows.includes(teacher.id!));
+    filteredTeachers.every(teacher => selectedRows.includes(teacher.id));
+
+  // Add handler for bulk export
+  const handleBulkExport = async () => {
+    const selectedIds = Object.entries(selectedTeachers)
+      .filter(([_, selected]) => selected)
+      .map(([id]) => id);
+
+    if (selectedIds.length === 0) {
+      notifications.show({
+        title: 'Chú ý',
+        message: 'Vui lòng chọn ít nhất một giáo viên để xuất phiếu lương',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const data = await exportApi.bulkExport('teacher', selectedIds);
+      if (data.success) {
+        notifications.show({
+          title: 'Thành công',
+          message: 'Đã xuất phiếu lương thành công',
+          color: 'green',
+        });
+      } else {
+        throw new Error(data.message || 'Có lỗi xảy ra');
+      }
+    } catch (error: any) {
+      console.error('Export bulk error:', error);
+      notifications.show({
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra khi xuất phiếu lương',
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <Container size="lg" mt="md">
@@ -161,15 +192,25 @@ export default function TeachersPage() {
               Thêm giáo viên
             </Button>
           </Link>
+          <Group>
+            <Button
+              leftSection={<IconFileExport size={16} />}
+              onClick={handleBulkExport}
+              loading={exporting}
+              disabled={Object.values(selectedTeachers).filter(Boolean).length === 0}
+            >
+              Xuất phiếu lương
+            </Button>
+          </Group>
         </Group>
       </Group>
 
       <Group align="flex-end" mb="md">
         <TextInput
-          placeholder="Tìm kiếm theo tên, vai trò, số điện thoại..."
+          placeholder="Tìm kiếm theo tên, vai trò, mã số..."
           leftSection={<IconSearch size={16} />}
           value={searchTerm}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+          onChange={(e) => setSearchTerm(e.target.value)}
           style={{ flexGrow: 1 }}
           label="Tìm kiếm"
         />
@@ -182,117 +223,162 @@ export default function TeachersPage() {
             { value: '100', label: '100 hàng' },
             { value: '1000', label: '1000 hàng' }
           ]}
-          label="Số dòng mỗi trang"
+          label="Số hàng mỗi trang"
           style={{ width: 130 }}
         />
       </Group>
 
-      <Table striped highlightOnHover withTableBorder>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th style={{ width: 40 }}>
-              <Checkbox 
-                checked={allSelected}
-                indeterminate={selectedRows.length > 0 && !allSelected}
-                onChange={(event) => handleSelectAll(event.currentTarget.checked)}
-              />
-            </Table.Th>
-            <Table.Th>Tên</Table.Th>
-            <Table.Th>SĐT</Table.Th>
-            <Table.Th>Chức vụ</Table.Th>
-            <Table.Th>Lương cơ bản</Table.Th>
-            <Table.Th>Lương dạy thêm</Table.Th>
-            <Table.Th>Đã ứng</Table.Th>
-            <Table.Th>Tổng lương</Table.Th>
-            <Table.Th style={{ width: 80 }}></Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {loading ? (
-            <Table.Tr>
-              <Table.Td colSpan={9} align="center">Đang tải...</Table.Td>
-            </Table.Tr>
-          ) : filteredTeachers.length === 0 ? (
-            <Table.Tr>
-              <Table.Td colSpan={9} align="center">Không tìm thấy giáo viên nào</Table.Td>
-            </Table.Tr>
-          ) : (
-            filteredTeachers.map((teacher) => (
-              <Table.Tr 
-                key={teacher.id}
-                bg={selectedRows.includes(teacher.id!) ? "var(--mantine-color-blue-light)" : undefined}
-              >
-                <Table.Td>
-                  <Checkbox 
-                    checked={selectedRows.includes(teacher.id!)}
-                    onChange={(event) => handleSelectRow(teacher.id!, event.currentTarget.checked)}
-                  />
-                </Table.Td>
-                <Table.Td>{teacher.name}</Table.Td>
-                <Table.Td>{teacher.phone}</Table.Td>
-                <Table.Td>
-                  {teacher.role?.split(',').map((rawRole, index) => {
-                    const role = rawRole.trim(); 
-                    const color =
-                    role === 'Quản lý' ? 'blue' :
-                    role === 'GV' ? 'green' :
-                    role === 'Đầu bếp' ? 'orange' :
-                    'gray';
+      <Box pos="relative">
+        <Group justify="space-between" mb="xs">
+          <ActionIcon 
+            variant="light" 
+            onClick={() => {
+              if (scrollAreaRef.current) {
+                scrollAreaRef.current.scrollLeft -= 200;
+              }
+            }}
+          >
+            <IconChevronLeft size={16} />
+          </ActionIcon>
+          <ActionIcon 
+            variant="light"
+            onClick={() => {
+              if (scrollAreaRef.current) {
+                scrollAreaRef.current.scrollLeft += 200;
+              }
+            }}
+          >
+            <IconChevronRight size={16} />
+          </ActionIcon>
+        </Group>
 
-                    return (
-                      <Badge key={index} color={color} className="flex flex-wrap gap-1">
-                        {role}
-                      </Badge>
-                    );
-                  })}
-                </Table.Td>
-                <Table.Td>
-                  {formatVND(teacher.base_salary)}
-                </Table.Td>
-                <Table.Td>
-                  {formatVND(teacher.extra_salary)}
-                </Table.Td>
-                <Table.Td>
-                  {formatVND(teacher.paid_amount)}
-                </Table.Td>
-                <Table.Td>
-                  <Text c={teacher.total_salary > 0 ? 'red' : 'green'}>
-                    {formatVND(teacher.total_salary)}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Menu position="bottom-end" withArrow>
-                    <Menu.Target>
-                      <ActionIcon variant="subtle">
-                        <IconDotsVertical size={16} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Link href={`/dashboard/teachers/${teacher.id}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <Menu.Item leftSection={<IconEdit size={14} />}>
-                          Chỉnh sửa
-                        </Menu.Item>
-                      </Link>
-                      <Link href={`/dashboard/teachers/${teacher.id}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <Menu.Item leftSection={<IconPrinter size={14} />}>
-                          In phiếu lương
-                        </Menu.Item>
-                      </Link>
-                      <Menu.Item 
-                        leftSection={<IconTrash size={14} />} 
-                        c="red"
-                        onClick={() => handleDelete(teacher.id!)}
-                      >
-                        Xóa
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                </Table.Td>
+        <ScrollArea scrollbarSize={8} scrollHideDelay={0} viewportRef={scrollAreaRef}>
+          <Table striped highlightOnHover withTableBorder>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ width: 60 }}>
+                  <Checkbox
+                    checked={filteredTeachers.length > 0 && filteredTeachers.every(teacher => selectedTeachers[teacher.id])}
+                    indeterminate={filteredTeachers.some(teacher => selectedTeachers[teacher.id]) && !filteredTeachers.every(teacher => selectedTeachers[teacher.id])}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      const newSelected: Record<string, boolean> = { ...selectedTeachers };
+                      filteredTeachers.forEach((teacher) => {
+                        newSelected[teacher.id] = checked;
+                      });
+                      setSelectedTeachers(newSelected);
+                      setSelectedRows(checked ? filteredTeachers.map(t => t.id) : []);
+                    }}
+                  />
+                </Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Mã số</Table.Th>
+                <Table.Th style={{ minWidth: 200 }}>Tên</Table.Th>
+                <Table.Th style={{ minWidth: 150 }}>Vai trò</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Lương cơ bản</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Ngày dạy</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Ngày nghỉ</Table.Th>
+                <Table.Th style={{ minWidth: 150 }}>Lương nhận được</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Ngày dạy thêm</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Lương dạy thêm</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Phụ cấp</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Dạy TA</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Dạy KNS</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>HS đi mới</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Tổng lương</Table.Th>
+                <Table.Th style={{ width: 80 }}></Table.Th>
               </Table.Tr>
-            ))
-          )}
-        </Table.Tbody>
-      </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {loading ? (
+                <Table.Tr>
+                  <Table.Td colSpan={9} align="center">Đang tải...</Table.Td>
+                </Table.Tr>
+              ) : filteredTeachers.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td colSpan={9} align="center">Không tìm thấy giáo viên nào</Table.Td>
+                </Table.Tr>
+              ) : (
+                filteredTeachers.map((teacher) => (
+                  <Table.Tr 
+                    key={teacher.id}
+                    bg={selectedRows.includes(teacher.id) ? "var(--mantine-color-blue-light)" : undefined}
+                  >
+                    <Table.Td>
+                      <Checkbox
+                        checked={!!selectedTeachers[teacher.id]}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setSelectedTeachers((prev) => ({
+                            ...prev,
+                            [teacher.id]: checked,
+                          }));
+                          setSelectedRows((prev) =>
+                            checked ? [...prev, teacher.id] : prev.filter((id) => id !== teacher.id)
+                          );
+                        }}
+                      />
+                    </Table.Td>
+                    <Table.Td>{teacher.teacher_no}</Table.Td>
+                    <Table.Td>{teacher.name}</Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        {teacher.role && teacher.role.split(',').map((role: string, index: number) => (
+                          <Badge key={index} color={getRoleColor(role.trim())} variant="filled">
+                            {role.trim()}
+                          </Badge>
+                        ))}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>{formatVND(teacher.base_salary)}</Table.Td>
+                    <Table.Td>{teacher.teaching_days}</Table.Td>
+                    <Table.Td>{teacher.absence_days}</Table.Td>
+                    <Table.Td>{formatVND(teacher.received_salary)}</Table.Td>
+                    <Table.Td>{teacher.extra_teaching_days}</Table.Td>
+                    <Table.Td>{formatVND(teacher.extra_salary)}</Table.Td>
+                    <Table.Td>{formatVND(teacher.insurance_support + teacher.responsibility_support + teacher.breakfast_support)}</Table.Td>
+                    <Table.Td>{formatVND(teacher.english_salary)}</Table.Td>
+                    <Table.Td>{formatVND(teacher.skill_salary)}</Table.Td>
+                    <Table.Td>{formatVND(teacher.new_students_list)}</Table.Td>
+                    <Table.Td>
+                      <Text c={teacher.total_salary > 0 ? 'red' : 'green'}>
+                        {formatVND(teacher.total_salary)}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Menu position="bottom-end" withArrow>
+                        <Menu.Target>
+                          <ActionIcon variant="subtle">
+                            <IconDotsVertical size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Link href={`/dashboard/teachers/${teacher.id}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <Menu.Item leftSection={<IconEdit size={14} />}>
+                              Chỉnh sửa
+                            </Menu.Item>
+                          </Link>
+                          <Link href={`/dashboard/teachers/${teacher.id}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <Menu.Item leftSection={<IconPrinter size={14} />}>
+                              In phiếu lương
+                            </Menu.Item>
+                          </Link>
+                          <Menu.Item 
+                            leftSection={<IconTrash size={14} />}
+                            color="red"
+                            onClick={() => handleDeleteTeacher(teacher.id)}
+                          >
+                            Xóa
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              )}
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
+      </Box>
 
       {/* Pagination footer */}
       {!loading && totalTeachers > 0 && (

@@ -29,11 +29,11 @@ export function StudentsList() {
       setLoading(true);
       setError(null);
       
-      const response = await studentApi.getAllStudents(page);
+      const response = await studentApi.getAllStudents(page, itemsPerPage);
       
-      setStudents(response.results);
-      setTotalStudents(response.count);
-      setCurrentPage(page);
+      setStudents(response.data);
+      setTotalStudents(response.totalElements);
+      setCurrentPage(response.currentPage);
     } catch (err) {
       setError('Không thể tải danh sách học sinh. Vui lòng thử lại sau.');
       console.error('Error fetching students:', err);

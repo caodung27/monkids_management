@@ -29,18 +29,6 @@ export default function AuthWrapper({ children }: AuthWrapperProps) {
           sessionStorage.getItem('auth_redirect_pending') === 'true'
         );
         
-        // Log the current auth state
-        console.log('AuthWrapper: Initial auth state check', {
-          hasAccessToken,
-          hasRefreshToken,
-          hasOAuthFlags,
-          localStorage: typeof window !== 'undefined' ? {
-            accessToken: localStorage.getItem('accessToken'),
-            refreshToken: localStorage.getItem('refreshToken'),
-            authSuccess: localStorage.getItem('auth_successful')
-          } : null
-        });
-        
         // If we have any tokens or flags, ensure they're consistent
         if (hasAccessToken || hasRefreshToken || hasOAuthFlags) {
           console.log('AuthWrapper: Found auth tokens/flags, ensuring consistency');

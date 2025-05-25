@@ -1,21 +1,7 @@
 'use client';
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-
-export type NotificationType = 'success' | 'error' | 'info' | 'warning';
-
-export interface Notification {
-  id?: string;
-  title: string;
-  message: string;
-  type: NotificationType;
-  timeout?: number;
-}
-
-interface UiState {
-  notifications: Notification[];
-  isDrawerOpen: boolean;
-}
+import { Notification, UiState, NotificationType } from '@/types';
 
 const initialState: UiState = {
   notifications: [],

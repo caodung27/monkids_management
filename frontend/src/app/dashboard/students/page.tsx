@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Container, Title, Table, TextInput, Group, Button, ActionIcon, Menu, Text, Badge, Select, Checkbox, Modal } from '@mantine/core';
-import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconPrinter } from '@tabler/icons-react';
+import { useState, useEffect, useRef } from 'react';
+import { Container, Title, Table, TextInput, Group, Button, ActionIcon, Menu, Text, Badge, Select, Checkbox, Modal, ScrollArea, Box } from '@mantine/core';
+import { IconSearch, IconPlus, IconDotsVertical, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconPrinter, IconFileExport } from '@tabler/icons-react';
 import Link from 'next/link';
-import { studentApi } from '@/api/apiService';
+import { studentApi, exportApi } from '@/api/apiService';
 import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
 
@@ -23,22 +23,24 @@ export default function StudentsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchStudents = async (page: number, pageSize: number = itemsPerPage) => {
     setLoading(true);
     try {
-      const data = await studentApi.getAllStudents(page, pageSize);
-      console.log('Fetched students data:', data);
+      const response = await studentApi.getAllStudents(page, pageSize);
+      console.log('Fetched students data:', response);
       
-      if (data && typeof data === 'object') {
-        setStudents(data.results || []);
-        setTotalStudents(data.count || 0);
-        setCurrentPage(page);
-        setTotalPages(Math.ceil((data.count || 0) / pageSize));
+      if (response && response.data) {
+        setStudents(response.data);
+        setTotalStudents(response.totalElements || 0);
+        setCurrentPage(response.currentPage || page);
+        setTotalPages(response.totalPages || Math.ceil((response.totalElements || 0) / pageSize));
         // Clear selection when fetching new data
         setSelectedRows([]);
       } else {
-        console.error('Unexpected API response format:', data);
+        console.error('Unexpected API response format:', response);
         setStudents([]);
       }
     } catch (error) {
@@ -96,7 +98,7 @@ export default function StudentsPage() {
       // Show success notification
       notifications.show({
         title: 'Thành công',
-        message: `Đã xóa ${result.deleted} học sinh`,
+        message: `Đã xóa ${selectedRows.length} học sinh`,
         color: 'green',
       });
     } catch (error) {
@@ -139,6 +141,38 @@ export default function StudentsPage() {
   const allSelected = filteredStudents.length > 0 && 
     filteredStudents.every(student => selectedRows.includes(student.sequential_number));
 
+  const handleBulkExport = async () => {
+    if (selectedRows.length === 0) {
+      notifications.show({
+        title: 'Chú ý',
+        message: 'Vui lòng chọn ít nhất một học sinh để xuất biên lai',
+        color: 'yellow',
+      });
+      return;
+    }
+    setExporting(true);
+    try {
+      const data = await exportApi.bulkExport('student', selectedRows);
+      if (data.success) {
+        notifications.show({
+          title: 'Thành công',
+          message: 'Đã xuất biên lai thành công',
+          color: 'green',
+        });
+      } else {
+        throw new Error(data.message || 'Có lỗi xảy ra');
+      }
+    } catch (error: any) {
+      notifications.show({
+        title: 'Lỗi',
+        message: error.message || 'Có lỗi xảy ra khi xuất biên lai',
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Container size="lg" mt="md">
       <Group justify="space-between" mb="md">
@@ -157,12 +191,20 @@ export default function StudentsPage() {
               Thêm học sinh
             </Button>
           </Link>
+          <Button
+            leftSection={<IconFileExport size={16} />}
+            onClick={handleBulkExport}
+            loading={exporting}
+            disabled={selectedRows.length === 0}
+          >
+            Xuất biên lai
+          </Button>
         </Group>
       </Group>
 
       <Group align="flex-end" mb="md">
         <TextInput
-          placeholder="Tìm kiếm theo tên, lớp, ID..."
+          placeholder="Tìm kiếm theo tên, lớp..."
           leftSection={<IconSearch size={16} />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -183,104 +225,154 @@ export default function StudentsPage() {
         />
       </Group>
 
-      <Table striped highlightOnHover withTableBorder>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th style={{ width: 40 }}>
-              <Checkbox 
-                checked={allSelected} 
-                indeterminate={selectedRows.length > 0 && !allSelected}
-                onChange={(event) => handleSelectAll(event.currentTarget.checked)} 
-              />
-            </Table.Th>
-            <Table.Th>ID</Table.Th>
-            <Table.Th>Tên</Table.Th>
-            <Table.Th>Lớp</Table.Th>
-            <Table.Th>Ngày sinh</Table.Th>
-            <Table.Th>Tổng học phí</Table.Th>
-            <Table.Th>Đã đóng</Table.Th>
-            <Table.Th>Còn lại</Table.Th>
-            <Table.Th style={{ width: 80 }}></Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {loading ? (
-            <Table.Tr>
-              <Table.Td colSpan={9} align="center">Đang tải...</Table.Td>
-            </Table.Tr>
-          ) : filteredStudents.length === 0 ? (
-            <Table.Tr>
-              <Table.Td colSpan={9} align="center">Không tìm thấy học sinh nào</Table.Td>
-            </Table.Tr>
-          ) : (
-            filteredStudents.map((student) => (
-              <Table.Tr 
-                key={student.sequential_number}
-                bg={selectedRows.includes(student.sequential_number) ? "var(--mantine-color-blue-light)" : undefined}
-              >
-                <Table.Td>
+      <Box pos="relative">
+        <Group justify="space-between" mb="xs">
+          <ActionIcon 
+            variant="light" 
+            onClick={() => {
+              if (scrollAreaRef.current) {
+                scrollAreaRef.current.scrollLeft -= 200;
+              }
+            }}
+          >
+            <IconChevronLeft size={16} />
+          </ActionIcon>
+          <ActionIcon 
+            variant="light"
+            onClick={() => {
+              if (scrollAreaRef.current) {
+                scrollAreaRef.current.scrollLeft += 200;
+              }
+            }}
+          >
+            <IconChevronRight size={16} />
+          </ActionIcon>
+        </Group>
+
+        <ScrollArea scrollbarSize={8} scrollHideDelay={0} viewportRef={scrollAreaRef}>
+          <Table striped highlightOnHover withTableBorder>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ width: 40 }}>
                   <Checkbox 
-                    checked={selectedRows.includes(student.sequential_number)}
-                    onChange={(event) => handleSelectRow(student.sequential_number, event.currentTarget.checked)}
+                    checked={allSelected} 
+                    indeterminate={selectedRows.length > 0 && !allSelected}
+                    onChange={(event) => handleSelectAll(event.currentTarget.checked)} 
                   />
-                </Table.Td>
-                <Table.Td>{student.student_id}</Table.Td>
-                <Table.Td>{student.name}</Table.Td>
-                <Table.Td>
-                  <Badge color={
-                    student.classroom === 'Mon1' ? 'blue' : 
-                    student.classroom === 'Mon2' ? 'green' :
-                    student.classroom === 'Mon3' ? 'orange' :
-                    'gray'
-                  }>
-                    {student.classroom}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>{student.birthdate}</Table.Td>
-                <Table.Td>
-                  {formatVND(student.total_fee)}
-                </Table.Td>
-                <Table.Td>
-                  {formatVND(student.paid_amount)}
-                </Table.Td>
-                <Table.Td>
-                  <Text c={student.remaining_amount > 0 ? 'red' : 'green'}>
-                    {formatVND(student.remaining_amount)}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Menu position="bottom-end" withArrow>
-                    <Menu.Target>
-                      <ActionIcon variant="subtle">
-                        <IconDotsVertical size={16} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Link href={`/dashboard/students/${student.sequential_number}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <Menu.Item leftSection={<IconEdit size={14} />}>
-                          Chỉnh sửa
-                        </Menu.Item>
-                      </Link>
-                      <Link href={`/dashboard/students/${student.sequential_number}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <Menu.Item leftSection={<IconPrinter size={14} />}>
-                          In biên lai
-                        </Menu.Item>
-                      </Link>
-                      <Menu.Item 
-                        leftSection={<IconTrash size={14} />}
-                        color="red"
-                        onClick={() => handleDeleteStudent(student.sequential_number)}
-                      >
-                        Xóa
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                </Table.Td>
+                </Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Mã số</Table.Th>
+                <Table.Th style={{ minWidth: 220 }}>Tên</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Lớp</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Ngày sinh</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Học phí gốc</Table.Th>
+                <Table.Th style={{ minWidth: 100 }}>Giảm(%)</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Học phí</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Điện nước</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Tiền ăn</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Học phí khác</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Tổng học phí</Table.Th>
+                <Table.Th style={{ minWidth: 120 }}>Số tiền còn lại</Table.Th>
+                <Table.Th style={{ width: 80 }}></Table.Th>
               </Table.Tr>
-            ))
-          )}
-        </Table.Tbody>
-      </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {loading ? (
+                <Table.Tr>
+                  <Table.Td colSpan={9} align="center">Đang tải...</Table.Td>
+                </Table.Tr>
+              ) : filteredStudents.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td colSpan={9} align="center">Không tìm thấy học sinh nào</Table.Td>
+                </Table.Tr>
+              ) : (
+                filteredStudents.map((student) => (
+                  <Table.Tr 
+                    key={student.sequential_number}
+                    bg={selectedRows.includes(student.sequential_number) ? "var(--mantine-color-blue-light)" : undefined}
+                  >
+                    <Table.Td>
+                      <Checkbox
+                        checked={selectedRows.includes(student.sequential_number)}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          handleSelectRow(student.sequential_number, checked);
+                        }}
+                      />
+                    </Table.Td>
+                    <Table.Td>{student.student_id}</Table.Td>
+                    <Table.Td>{student.name}</Table.Td>
+                    <Table.Td>
+                      <Badge color={
+                        student.classroom === 'Mon1' ? 'blue' : 
+                        student.classroom === 'Mon2' ? 'green' :
+                        student.classroom === 'Mon3' ? 'orange' :
+                        'gray'
+                      }>
+                        {student.classroom}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>{student.birthdate}</Table.Td>
+                    <Table.Td>
+                      {formatVND(student.base_fee)}
+                    </Table.Td>
+                    <Table.Td>
+                      {student.discount_percentage * 100}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatVND(student.final_fee)}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatVND(student.utilities_fee)}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatVND(student.meal_fee)}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatVND(student.eng_fee + student.skill_fee + student.student_fund + student.facility_fee)}
+                    </Table.Td>
+                    <Table.Td>
+                      {formatVND(student.total_fee)}
+                    </Table.Td>
+                    <Table.Td>
+                      <Text c={student.remaining_amount > 0 ? 'red' : 'green'}>
+                        {formatVND(student.remaining_amount)}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Menu position="bottom-end" withArrow>
+                        <Menu.Target>
+                          <ActionIcon variant="subtle">
+                            <IconDotsVertical size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Link href={`/dashboard/students/${student.sequential_number}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <Menu.Item leftSection={<IconEdit size={14} />}>
+                              Chỉnh sửa
+                            </Menu.Item>
+                          </Link>
+                          <Link href={`/dashboard/students/${student.sequential_number}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <Menu.Item leftSection={<IconPrinter size={14} />}>
+                              In biên lai
+                            </Menu.Item>
+                          </Link>
+                          <Menu.Item 
+                            leftSection={<IconTrash size={14} />}
+                            color="red"
+                            onClick={() => handleDeleteStudent(student.sequential_number)}
+                          >
+                            Xóa
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              )}
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
+      </Box>
 
       {/* Pagination footer */}
       {!loading && totalStudents > 0 && (

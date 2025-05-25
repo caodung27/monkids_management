@@ -1,26 +1,62 @@
 'use client';
 
-import { useState, useEffect, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
+import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea, MultiSelect, Badge } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { teacherApi } from '@/api/apiService';
-import { Teacher } from '@/types';
+import { Teacher, TeacherApiPayload } from '@/types';
 import { IconArrowLeft, IconDeviceFloppy } from '@tabler/icons-react';
 import { formatVND } from '@/utils/formatters';
 import { notifications } from '@mantine/notifications';
 
+interface TeacherFormValues {
+  name: string;
+  role: string[];
+  phone: string;
+  base_salary: number;
+  teaching_days: number;
+  absence_days: number;
+  received_salary: number;
+  extra_teaching_days: number;
+  extra_salary: number;
+  insurance_support: number;
+  responsibility_support: number;
+  breakfast_support: number;
+  skill_sessions: number;
+  skill_salary: number;
+  english_sessions: number;
+  english_salary: number;
+  new_students_list: string;
+  paid_amount: number;
+  total_salary: number;
+  note: string;
+}
+
+interface RoleOption {
+  value: string;
+  label: string;
+  color: string;
+}
+
+const ROLE_OPTIONS: RoleOption[] = [
+  { value: 'Quản lý', label: 'Quản lý', color: 'blue' },
+  { value: 'Giáo viên', label: 'Giáo viên', color: 'green' },
+  { value: 'Đầu bếp', label: 'Đầu bếp', color: 'orange' },
+];
+
 export default function NewTeacherPage() {
   const router = useRouter();
   
-  const form = useForm<Teacher>({
+  const form = useForm<TeacherFormValues>({
     validate: {
       name: (value) => (!value ? 'Vui lòng nhập tên giáo viên' : null),
-      role: (value) => (!value ? 'Vui lòng chọn vai trò' : null),
+      role: (value) => (value.length === 0 ? 'Vui lòng chọn ít nhất một vai trò' : null),
     },
   });
 
   useEffect(() => {
+    // Destructure all relevant values from form.values
     const {
       base_salary: v_base_salary,
       teaching_days: v_teaching_days,
@@ -30,10 +66,10 @@ export default function NewTeacherPage() {
       english_sessions: v_english_sessions,
       paid_amount: v_paid_amount,
       new_students_list: v_new_students_list,
+      extra_salary: v_current_extra_salary,
+      skill_salary: v_current_skill_salary,
+      english_salary: v_current_english_salary,
       received_salary: v_current_received_salary,
-      extra_salary: v_current_extra_salary,     
-      skill_salary: v_current_skill_salary,   
-      english_salary: v_current_english_salary, 
       total_salary: v_current_total_salary
     } = form.values;
 
@@ -41,60 +77,54 @@ export default function NewTeacherPage() {
     const base_salary = Number(v_base_salary) || 0;
     const teaching_days = Number(v_teaching_days) || 0;
     const absence_days = Number(v_absence_days) || 0;
-    const extra_teaching_days = Number(v_extra_teaching_days) || 0;
-    const skill_sessions = Number(v_skill_sessions) || 0;
-    const english_sessions = Number(v_english_sessions) || 0;
+    const extra_teaching_days_val = Number(v_extra_teaching_days) || 0;
+    const skill_sessions_val = Number(v_skill_sessions) || 0;
+    const english_sessions_val = Number(v_english_sessions) || 0;
     const paid_amount = Number(v_paid_amount) || 0;
     const new_students_list = Number(v_new_students_list) || 0;
 
+    // Calculate received salary using the updated formula
+    const totalWorkDaysAndAbsence = teaching_days + absence_days;
     const calculated_received_salary =
-      teaching_days > 0
-        ? Math.round((base_salary / teaching_days) * Math.max(0, teaching_days - absence_days))
+      totalWorkDaysAndAbsence > 0
+        ? Math.round((base_salary / totalWorkDaysAndAbsence) * teaching_days)
         : 0;
 
-    const calculated_extra_salary = extra_teaching_days * 150000;
-    const calculated_skill_salary = skill_sessions * 125000;
-    const calculated_english_salary = english_sessions * 150000;
+    // Calculate extra salary
+    const final_extra_salary = extra_teaching_days_val * 150000;
 
-    // Get support values
+    // Calculate skill salary
+    const final_skill_salary = skill_sessions_val * 125000;
+
+    // Calculate english salary
+    const final_english_salary = english_sessions_val * 150000;
+
+    // Add insurance and other supports to calculation
     const insurance_support = Number(form.values.insurance_support) || 0;
     const responsibility_support = Number(form.values.responsibility_support) || 0;
     const breakfast_support = Number(form.values.breakfast_support) || 0;
     
-    // Calculate total salary with all components
+    // Calculate total salary
     const calculated_total_salary =
       calculated_received_salary +
-      calculated_extra_salary +
-      calculated_skill_salary +
-      calculated_english_salary +
+      final_extra_salary +
+      final_skill_salary +
+      final_english_salary +
       insurance_support +
       responsibility_support +
       breakfast_support +
       new_students_list -
       paid_amount;
 
-    // Prepare updated values
-    const newValues = {
+    // Update form values
+    form.setValues(currentValues => ({
+      ...currentValues,
       received_salary: calculated_received_salary,
-      extra_salary: calculated_extra_salary,
-      skill_salary: calculated_skill_salary,
-      english_salary: calculated_english_salary,
+      extra_salary: final_extra_salary,
+      skill_salary: final_skill_salary,
+      english_salary: final_english_salary,
       total_salary: calculated_total_salary,
-    };
-
-    // Check if any calculated values have changed to avoid unnecessary updates and potential loops
-    if (
-      v_current_received_salary !== newValues.received_salary ||
-      v_current_extra_salary !== newValues.extra_salary ||
-      v_current_skill_salary !== newValues.skill_salary ||
-      v_current_english_salary !== newValues.english_salary ||
-      v_current_total_salary !== newValues.total_salary
-    ) {
-      form.setValues(currentValues => ({
-        ...currentValues,
-        ...newValues
-      }));
-    }
+    }));
   }, [
     form.values.base_salary,
     form.values.teaching_days,
@@ -104,23 +134,16 @@ export default function NewTeacherPage() {
     form.values.english_sessions,
     form.values.paid_amount,
     form.values.new_students_list,
-    // Include values that are read for comparison
-    form.values.received_salary,
-    form.values.extra_salary,
-    form.values.skill_salary,
-    form.values.english_salary,
-    form.values.total_salary,
     form.values.insurance_support,
     form.values.responsibility_support,
     form.values.breakfast_support,
   ]);
 
-  const handleSubmit = async (values: Teacher) => {
+  const handleSubmit = async (values: TeacherFormValues) => {
     try {
-      // Instead of excluding fields, format them according to API requirements
-      const apiPayload = {
-        name: values.name,
-        role: values.role,
+      const apiPayload: TeacherApiPayload = {
+        ...values,
+        role: values.role.join(', '),
         phone: values.phone === '' ? null : values.phone,
         base_salary: (Number(values.base_salary) || 0).toFixed(2),
         teaching_days: Number(values.teaching_days) || 0,
@@ -144,15 +167,15 @@ export default function NewTeacherPage() {
       await teacherApi.createTeacher(apiPayload);
       notifications.show({
         title: 'Thành công',
-        message: 'Giáo viên mới đã được thêm thành công!',
+        message: 'Thông tin giáo viên đã được tạo thành công!',
         color: 'green',
       });
       router.push('/dashboard/teachers');
     } catch (error) {
-      console.error('Error saving teacher:', error);
+      console.error('Error creating teacher:', error);
       notifications.show({
         title: 'Lỗi',
-        message: 'Có lỗi xảy ra khi thêm giáo viên. Vui lòng thử lại.',
+        message: 'Có lỗi khi tạo giáo viên mới. Vui lòng thử lại sau.',
         color: 'red',
       });
     }
@@ -197,18 +220,28 @@ export default function NewTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              <Select
+              <MultiSelect
                 label="Vai trò"
                 placeholder="Chọn vai trò"
                 required
-                data={[
-                  { value: 'GV', label: 'Giáo viên' },
-                  { value: 'Quản lý', label: 'Quản lý' },
-                  { value: 'Quản lý + GV', label: 'Quản lý + Giáo viên' },
-                  { value: 'Đầu bếp', label: 'Đầu bếp' },
-                ]}
+                data={ROLE_OPTIONS}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('role')}
+                styles={{
+                  input: {
+                    minHeight: '36px',
+                  },
+                }}
+                renderOption={({ option, ...others }) => {
+                  const roleOption = ROLE_OPTIONS.find(opt => opt.value === option.value);
+                  return (
+                    <div {...others}>
+                      <Badge color={roleOption?.color} variant="filled" size="sm" mr="xs">
+                        {option.label}
+                      </Badge>
+      </div>
+                  );
+                }}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
@@ -230,6 +263,7 @@ export default function NewTeacherPage() {
                 placeholder="Nhập lương cơ bản"
                 suffix=" ₫"
                 thousandSeparator=","
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('base_salary')}
               />
@@ -240,6 +274,7 @@ export default function NewTeacherPage() {
                 placeholder="Nhập số ngày dạy"
                 min={0}
                 max={31}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('teaching_days')}
               />
@@ -250,6 +285,7 @@ export default function NewTeacherPage() {
                 placeholder="Nhập số ngày vắng"
                 min={0}
                 max={31}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('absence_days')}
               />
@@ -276,6 +312,7 @@ export default function NewTeacherPage() {
                 label="Số ngày dạy thêm"
                 placeholder="Nhập số ngày dạy thêm"
                 min={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_teaching_days')}
               />
@@ -288,6 +325,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 readOnly
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_salary')}
               />
@@ -299,6 +337,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('insurance_support')}
               />
@@ -310,6 +349,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('responsibility_support')}
               />
@@ -321,6 +361,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('breakfast_support')}
               />
@@ -335,6 +376,7 @@ export default function NewTeacherPage() {
                 label="Số buổi dạy KNS"
                 placeholder="Nhập số buổi KNS"
                 min={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_sessions')}
               />
@@ -347,6 +389,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 readOnly
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_salary')}
               />
@@ -356,6 +399,7 @@ export default function NewTeacherPage() {
                 label="Số buổi dạy Tiếng Anh"
                 placeholder="Nhập số buổi TA"
                 min={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_sessions')}
               />
@@ -368,6 +412,7 @@ export default function NewTeacherPage() {
                 thousandSeparator=","
                 min={0}
                 readOnly
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_salary')}
               />
@@ -384,6 +429,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('paid_amount')}
               />
@@ -395,6 +441,7 @@ export default function NewTeacherPage() {
                 suffix=" ₫"
                 thousandSeparator=","
                 min={0}
+                decimalScale={0}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('new_students_list')}
               />

@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
-import dynamic from 'next/dynamic';
-import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css';
-import '../styles/globals.css';
+import { Inter } from 'next/font/google';
+import App from './App';
+import { Providers } from './providers';
+import './globals.css';
+import { ColorSchemeScript } from '@mantine/core';
 
-// Dynamic import to avoid server component issues
-const App = dynamic(() => import('./App'), { ssr: true });
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'MẦM NON ĐỘC LẬP MONKIDS',
-  description: 'Hệ thống quản lý học sinh và giáo viên',
+  title: 'Monkid Management',
+  description: 'Monkid Management System',
 };
 
 export default function RootLayout({
@@ -18,12 +18,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
+    <html lang="en">
       <head>
-        <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, user-scalable=no" />
+        <ColorSchemeScript defaultColorScheme="light" />
       </head>
-      <body>
-        <App>{children}</App>
+      <body className={inter.className}>
+        <Providers>
+          <App>{children}</App>
+        </Providers>
       </body>
     </html>
   );

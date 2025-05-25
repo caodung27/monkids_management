@@ -1,159 +1,122 @@
-# MonKids Management System
+# Monkid Management Backend
 
-## Project Overview
-MonKids is a comprehensive backend management system for educational institutions, designed to manage student and teacher information with robust financial tracking.
-
-## Project Structure
-```
-src/
-├── monkid/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   ├── serializers.py
-│   │   └── views.py
-│   ├── __init__.py
-│   ├── settings.py
-│   └── urls.py
-├── import_data.py
-└── requirements.txt
-```
-
-## Prerequisites
-- Python 3.10+
-- Django 5.2.1
-- PostgreSQL (required for production)
-
-## Setup Instructions
-
-1. Clone the repository
-2. Create a virtual environment
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-```
-
-3. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-
-4. Set up database
-```bash
-python manage.py makemigrations
-python manage.py migrate
-```
-
-5. Import initial data
-```bash
-python import_data.py
-```
-
-6. Run the development server
-```bash
-python manage.py runserver
-```
+This is the backend service for the Monkid Management system, built with NestJS.
 
 ## Features
-- Student fee management
-- Teacher salary tracking
-- REST API endpoints
-- CSV data import
-- JWT-based authentication
-- Google OAuth2 integration
-- Role-based access control
 
-## Database Configuration
-By default, the project uses SQLite. To use PostgreSQL, update the `DATABASES` configuration in `settings.py`.
+- User authentication with JWT and Google OAuth2
+- Role-based authorization
+- CRUD operations for users, students, and teachers
+- Swagger API documentation
+- PostgreSQL database integration
 
-## API Endpoints
+## Prerequisites
 
-### Authentication
-- Login: `/api/token/` (POST)
-- Refresh Token: `/api/token/refresh/` (POST)
-- Verify Token: `/api/token/verify/` (POST)
-- Google Login: `/api/auth/google/` (POST)
-- Logout: `/api/auth/logout/` (POST)
-- User Permissions: `/api/auth/permissions/` (GET)
+- Node.js (v14 or later)
+- PostgreSQL
+- npm or yarn
 
-### Resources
-- Students: `/api/students/`
-- Teachers: `/api/teachers/`
-- Users: `/api/users/`
+## Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd backend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env` file in the root directory with the following variables:
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_DATABASE=monkid_management
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-key-here
+JWT_REFRESH_SECRET=your-super-secret-refresh-key-here
+JWT_EXPIRATION=1h
+JWT_REFRESH_EXPIRATION=7d
+
+# Google OAuth2 Configuration
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+```
+
+4. Create the database:
+```bash
+createdb monkid_management
+```
+
+5. Run database migrations:
+```bash
+npm run typeorm migration:run
+```
+
+## Running the Application
+
+Development mode:
+```bash
+npm run start:dev
+```
+
+Production mode:
+```bash
+npm run build
+npm run start:prod
+```
+
+## API Documentation
+
+Once the application is running, you can access the Swagger API documentation at:
+```
+http://localhost:3000/api
+```
 
 ## Authentication
 
-### JWT Authentication
-The system uses JWT (JSON Web Tokens) for authentication. To access protected endpoints:
+The API uses JWT for authentication. To access protected endpoints:
 
-1. Obtain tokens by sending credentials to `/api/token/`
-2. Include the access token in the Authorization header:
-   ```
-   Authorization: Bearer <access_token>
-   ```
-3. Refresh expired tokens using `/api/token/refresh/`
+1. Login using `/auth/login` or `/auth/google`
+2. Include the JWT token in the Authorization header:
+```
+Authorization: Bearer <your-token>
+```
 
-### Google OAuth2
-To enable Google authentication:
+## Authorization
 
-1. Set up OAuth2 credentials in Google Cloud Console:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select an existing one
-   - Navigate to "APIs & Services" > "Credentials"
-   - Create an "OAuth client ID" for Web application
-   - Add authorized JavaScript origins (e.g., `http://localhost:3000`)
-   - Add authorized redirect URIs (e.g., `http://localhost:3000/auth/callback`)
-   - Copy your Client ID and Client Secret
+The API implements role-based authorization with two roles:
+- ADMIN: Full access to all endpoints
+- USER: Read-only access to data
 
-2. Configure environment variables:
-   - Create a `.env` file in the backend root directory with:
-   ```
-   GOOGLE_OAUTH2_CLIENT_ID=your-client-id
-   GOOGLE_OAUTH2_CLIENT_SECRET=your-client-secret
-   ```
+## Project Structure
 
-3. Verify the Google OAuth2 settings in `settings.py`:
-   ```python
-   SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv('GOOGLE_OAUTH2_CLIENT_ID', 'your-client-id')
-   SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.getenv('GOOGLE_OAUTH2_CLIENT_SECRET', 'your-client-secret')
-   SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ['email', 'profile']
-   ```
+```
+src/
+├── modules/
+│   ├── auth/              # Authentication module
+│   ├── users/             # User management
+│   ├── students/          # Student management
+│   ├── teachers/          # Teacher management
+│   └── common/            # Shared resources
+├── config/               # Configuration files
+└── main.ts              # Application entry point
+```
 
-4. Test the integration:
-   - Frontend should call `/api/auth/google/` with the Google ID token
-   - Backend will verify the token and create/login the user
+## Contributing
 
-## Google OAuth Authentication
+1. Create a feature branch
+2. Commit your changes
+3. Push to the branch
+4. Create a Pull Request
 
-This application provides Google OAuth2 authentication. Here's how it's implemented:
+## License
 
-1. The backend uses `social-auth-app-django` to handle the OAuth flow
-2. Custom JWT token generation is implemented in the `complete_google_oauth` function in `src/app/views.py`
-3. After successful authentication, the user is redirected to the frontend callback URL with tokens
-
-OAuth-related endpoints:
-- `/oauth/login/google-oauth2/` - Initiates the Google OAuth login flow
-- `/oauth/complete/google-oauth2/` - Handles the OAuth completion and generates tokens
-
-The implementation ensures:
-- JWT tokens are generated for authenticated users
-- Tokens are passed both as URL parameters and cookies
-- Security flags are properly set on cookies
-- Detailed logging is available for troubleshooting
-
-### Google OAuth Configuration
-
-To configure Google OAuth:
-1. Create a project in Google Cloud Console
-2. Set up OAuth 2.0 credentials
-3. Configure the authorized redirect URI as `http://localhost:8000/oauth/complete/google-oauth2/`
-4. Add your client ID and secret to the Django settings
-
-For more information, refer to the documentation for `social-auth-app-django` and Google OAuth2.
-
-## Development Notes
-
-- Uses Django REST Framework for API
-- Supports CRUD operations for students and teachers
-- Token blacklisting for secure logout
-- Role-based permissions (admin, teacher, regular user) 
+This project is licensed under the MIT License.
