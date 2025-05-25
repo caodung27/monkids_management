@@ -119,7 +119,7 @@ export default function NewStudentPage() {
     try {
       // Verify authentication first
       const { TokenService } = await import('@/api/apiService');
-      const isAuthenticated = await TokenService.verifyAndRefreshTokens();
+      const isAuthenticated = TokenService.checkTokensExist();
       
       if (!isAuthenticated) {
         notifications.show({
@@ -129,27 +129,36 @@ export default function NewStudentPage() {
         });
         return;
       }
+
+      // Get total students count to generate student_id
+      const response = await studentApi.getAllStudents(1, 1);
+      const totalStudents = response.totalElements || 0;
+      const student_id = totalStudents + 1;
+
+      // Calculate final fee
+      const baseFee = Number(formValues.base_fee || 0);
+      const discountPercentage = Number(formValues.discount_percentage) || 0;
+      const finalFee = Math.round(baseFee * (1 - discountPercentage));
       
       const apiPayload = {
+        student_id,
         name: formValues.name,
         classroom: formValues.classroom,
         birthdate: formValues.birthdate ? formValues.birthdate.toISOString().split('T')[0] : null,
-        // Format numeric fields as strings for API
-        base_fee: String(formValues.base_fee || 0),
-        // Keep discount_percentage as a number for API
-        discount_percentage: Number(formValues.discount_percentage) || 0,
-        final_fee: String(formValues.final_fee || 0),
-        utilities_fee: String(formValues.utilities_fee || 0),
-        pt: String(formValues.pt || 0),
-        pm: String(formValues.pm || 0),
-        meal_fee: String(formValues.meal_fee || 0),
-        eng_fee: String(formValues.eng_fee || 0),
-        skill_fee: String(formValues.skill_fee || 0),
-        student_fund: String(formValues.student_fund || 0),
-        facility_fee: String(formValues.facility_fee || 0),
-        total_fee: String(formValues.total_fee || 0),
-        paid_amount: String(formValues.paid_amount || 0),
-        remaining_amount: String(formValues.remaining_amount || 0),
+        base_fee: baseFee,
+        discount_percentage: discountPercentage,
+        final_fee: finalFee,
+        utilities_fee: Number(formValues.utilities_fee || 0),
+        pt: Number(formValues.pt || 0),
+        pm: Number(formValues.pm || 0),
+        meal_fee: Number(formValues.meal_fee || 0),
+        eng_fee: Number(formValues.eng_fee || 0),
+        skill_fee: Number(formValues.skill_fee || 0),
+        student_fund: Number(formValues.student_fund || 0),
+        facility_fee: Number(formValues.facility_fee || 0),
+        total_fee: Number(formValues.total_fee || 0),
+        paid_amount: Number(formValues.paid_amount || 0),
+        remaining_amount: Number(formValues.remaining_amount || 0),
       };
       
       console.log('Authentication check before creating student:', {
@@ -367,6 +376,7 @@ export default function NewStudentPage() {
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('pt')}
                 min={0}
+                decimalScale={1}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 3 }}>
@@ -376,6 +386,7 @@ export default function NewStudentPage() {
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('pm')}
                 min={0}
+                decimalScale={1}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>

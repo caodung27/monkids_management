@@ -2,18 +2,10 @@
 
 import { useQuery, useMutation, QueryClient } from '@tanstack/react-query';
 import { studentApi } from '@/api/apiService';
-import { useDispatch } from 'react-redux';
-import { 
-  setStudents, 
-  setSelectedStudent, 
-  setLoading, 
-  setError,
-  addStudent,
-  updateStudent,
-  deleteStudent
-} from '@/store/slices/studentsSlice';
 import { StudentFormValues, StudentApiPayload } from '@/validations/studentSchema';
-import { addNotification } from '@/store/slices/uiSlice';
+import { notifications } from '@mantine/notifications';
+import { useState, useEffect } from 'react';
+import { Student } from '@/types';
 
 // Query keys
 export const studentKeys = {
@@ -28,44 +20,80 @@ export const studentKeys = {
  * Hook to fetch all students
  */
 export const useStudents = () => {
-  const dispatch = useDispatch();
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+  const [totalPages, setTotalPages] = useState(1);
 
-  return useQuery({
-    queryKey: studentKeys.lists(),
-    queryFn: async () => {
-      dispatch(setLoading(true));
-      try {
-        const data = await studentApi.getAllStudents();
-        dispatch(setStudents(data));
-        return data;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi khi tải danh sách học sinh';
-        dispatch(setError(errorMessage));
-        throw error;
+  const fetchStudents = async (page: number, pageSize: number = itemsPerPage) => {
+    setLoading(true);
+    try {
+      const response = await studentApi.getAllStudents(page, pageSize);
+      
+      if (response && response.data) {
+        setStudents(response.data);
+        setTotalStudents(response.totalElements || 0);
+        setCurrentPage(response.currentPage || page);
+        setTotalPages(response.totalPages || Math.ceil((response.totalElements || 0) / pageSize));
+      } else {
+        setStudents([]);
+        setTotalStudents(0);
       }
-    },
-  });
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      setStudents([]);
+      setTotalStudents(0);
+      notifications.show({
+        title: 'Lỗi',
+        message: 'Không thể tải danh sách học sinh. Vui lòng thử lại sau.',
+        color: 'red'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents(1, itemsPerPage);
+  }, [itemsPerPage]);
+
+  const handlePageChange = (page: number) => {
+    fetchStudents(page, itemsPerPage);
+    window.scrollTo(0, 0);
+  };
+
+  const handlePageSizeChange = (value: string | null) => {
+    if (value) {
+      const newSize = parseInt(value);
+      setItemsPerPage(newSize);
+      setCurrentPage(1);
+    }
+  };
+
+  return {
+    students,
+    loading,
+    currentPage,
+    totalStudents,
+    itemsPerPage,
+    totalPages,
+    handlePageChange,
+    handlePageSizeChange,
+    fetchStudents
+  };
 };
 
 /**
  * Hook to fetch a single student by ID
  */
 export const useStudent = (id: string) => {
-  const dispatch = useDispatch();
-
   return useQuery({
     queryKey: studentKeys.detail(id),
     queryFn: async () => {
-      dispatch(setLoading(true));
-      try {
-        const data = await studentApi.getStudentById(id);
-        dispatch(setSelectedStudent(data));
-        return data;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi khi tải thông tin học sinh';
-        dispatch(setError(errorMessage));
-        throw error;
-      }
+      const data = await studentApi.getStudent(id);
+      return data;
     },
     enabled: !!id,
   });
@@ -75,31 +103,25 @@ export const useStudent = (id: string) => {
  * Hook to create a new student
  */
 export const useCreateStudent = (queryClient: QueryClient) => {
-  const dispatch = useDispatch();
-
   return useMutation({
     mutationFn: async (formData: StudentFormValues) => {
       const apiPayload = formData as unknown as StudentApiPayload;
       return await studentApi.createStudent(apiPayload);
     },
-    onSuccess: (data) => {
-      dispatch(addStudent(data));
-      dispatch(addNotification({
+    onSuccess: () => {
+      notifications.show({
         title: 'Thành công',
         message: 'Học sinh mới đã được thêm thành công!',
-        type: 'success',
-      }));
-      // Invalidate and refetch
+        color: 'green'
+      });
       queryClient.invalidateQueries({ queryKey: studentKeys.lists() });
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Lỗi khi thêm học sinh';
-      dispatch(setError(errorMessage));
-      dispatch(addNotification({
+      notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi xảy ra khi thêm học sinh. Vui lòng thử lại.',
-        type: 'error',
-      }));
+        color: 'red'
+      });
     },
   });
 };
@@ -108,8 +130,6 @@ export const useCreateStudent = (queryClient: QueryClient) => {
  * Hook to update an existing student
  */
 export const useUpdateStudent = (queryClient: QueryClient) => {
-  const dispatch = useDispatch();
-
   return useMutation({
     mutationFn: async ({ 
       sequentialNumber, 
@@ -121,25 +141,21 @@ export const useUpdateStudent = (queryClient: QueryClient) => {
       const apiPayload = formData as unknown as StudentApiPayload;
       return await studentApi.updateStudent(sequentialNumber, apiPayload);
     },
-    onSuccess: (data) => {
-      dispatch(updateStudent(data));
-      dispatch(addNotification({
+    onSuccess: () => {
+      notifications.show({
         title: 'Thành công',
         message: 'Thông tin học sinh đã được cập nhật thành công!',
-        type: 'success',
-      }));
-      // Invalidate and refetch
+        color: 'green'
+      });
       queryClient.invalidateQueries({ queryKey: studentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: studentKeys.details() });
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Lỗi khi cập nhật học sinh';
-      dispatch(setError(errorMessage));
-      dispatch(addNotification({
+      notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi khi lưu thông tin học sinh. Vui lòng thử lại sau.',
-        type: 'error',
-      }));
+        color: 'red'
+      });
     },
   });
 };
@@ -148,28 +164,22 @@ export const useUpdateStudent = (queryClient: QueryClient) => {
  * Hook to delete a student
  */
 export const useDeleteStudent = (queryClient: QueryClient) => {
-  const dispatch = useDispatch();
-
   return useMutation({
     mutationFn: (sequentialNumber: string) => studentApi.deleteStudent(sequentialNumber),
-    onSuccess: (_, sequentialNumber) => {
-      dispatch(deleteStudent(sequentialNumber));
-      dispatch(addNotification({
+    onSuccess: () => {
+      notifications.show({
         title: 'Thành công',
         message: 'Đã xóa học sinh thành công!',
-        type: 'success',
-      }));
-      // Invalidate and refetch
+        color: 'green'
+      });
       queryClient.invalidateQueries({ queryKey: studentKeys.lists() });
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Lỗi khi xóa học sinh';
-      dispatch(setError(errorMessage));
-      dispatch(addNotification({
+      notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi khi xóa học sinh. Vui lòng thử lại sau.',
-        type: 'error',
-      }));
+        color: 'red'
+      });
     },
   });
 }; 

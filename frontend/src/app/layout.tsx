@@ -1,11 +1,15 @@
-import App from './App';
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import App from './App';
+import { Providers } from './providers';
 import './globals.css';
-import AppLayout from '@/components/layout/AppLayout';
+import { ColorSchemeScript } from '@mantine/core';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Monkids Management System',
-  description: 'Student and Teacher Management System',
+  title: 'Monkid Management',
+  description: 'Monkid Management System',
 };
 
 export default function RootLayout({
@@ -15,12 +19,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        <App>
-          <AppLayout>
-            {children}
-          </AppLayout>
-        </App>
+      <head>
+        <ColorSchemeScript defaultColorScheme="light" />
+      </head>
+      <body className={inter.className}>
+        <Providers>
+          <App>{children}</App>
+        </Providers>
       </body>
     </html>
   );

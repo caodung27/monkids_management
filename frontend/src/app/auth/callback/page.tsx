@@ -1,282 +1,177 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { TokenService } from '@/api/apiService';
-import { Center, Loader, Container, Text, Title, Code, Button, Paper } from '@mantine/core';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
+import { useSearchParams } from 'next/navigation';
+import { Container, Text, Loader, Center } from '@mantine/core';
+import { authApi, TokenService } from '@/api/apiService';
 
-export default function AuthCallbackPage() {
-  const searchParams = useSearchParams();
+export default function OAuthCallbackPage() {
   const router = useRouter();
-  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
-  const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(true);
-  const [redirectTriggered, setRedirectTriggered] = useState(false);
-  const [tokensSaved, setTokensSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const processCallback = async () => {
+    const handleCallback = async () => {
       try {
-        console.log('Auth callback: Starting token processing');
+        console.log('OAuthCallback: Handling callback');
         
-        // Get tokens directly from URL
+        // Get the authorization code from the URL
+        const code = searchParams.get('code');
         const accessToken = searchParams.get('access_token');
         const refreshToken = searchParams.get('refresh_token');
-        const userId = searchParams.get('user_id');
         const email = searchParams.get('email');
-        const timestamp = searchParams.get('timestamp');
+        const isNewUserParam = searchParams.get('is_new_user'); // Get raw string
+        const allParams = Object.fromEntries(searchParams.entries());
 
-        setDebugInfo({
-          tokens: { 
-            hasAccessToken: !!accessToken,
-            hasRefreshToken: !!refreshToken,
-            accessTokenPreview: accessToken ? `${accessToken.substring(0, 15)}...` : null,
-            userId,
-            email,
-            timestamp
-          },
-          url: window.location.href
-        });
-
-        console.log('Auth callback: Retrieved tokens from URL', { 
+        console.log('[AUTH_CALLBACK_DEBUG] All Raw Query Params:', allParams);
+        console.log(`[AUTH_CALLBACK_DEBUG] Raw 'is_new_user' param from URL: '${isNewUserParam}'`);
+        
+        const isNewUser = isNewUserParam === 'true'; // Convert to boolean
+        console.log(`[AUTH_CALLBACK_DEBUG] Parsed 'isNewUser' boolean: ${isNewUser}`);
+        
+        // Original console.log for essential derived params - ensure this is correct
+        console.log('OAuthCallback: Essential Derived Params', { 
+          hasCode: !!code, 
           hasAccessToken: !!accessToken,
           hasRefreshToken: !!refreshToken,
-          userId,
-          email
+          email: email, 
+          isNewUserBoolean: isNewUser // Renamed key for clarity, using the boolean
         });
-
+        
         if (accessToken && refreshToken) {
-          console.log('Auth callback: Storing tokens');
+          // Store the tokens
+          TokenService.setAccessToken(accessToken);
+          TokenService.setRefreshToken(refreshToken);
+          
+          // Store the user email
+          if (email) {
+            localStorage.setItem('user_email', email);
+            // Add to cookies for broader availability
+            document.cookie = `email=${email};path=/;max-age=86400`;
+          }
+          
+          // Set the isNewUser flag in localStorage if applicable
+          if (isNewUser) {
+            console.log('OAuthCallback: Setting isNewUser flag to true');
+            localStorage.setItem('isNewUser', 'true');
+            localStorage.setItem('rawIsNewUserValue', 'true'); // Backup flag
+          } else {
+            localStorage.setItem('isNewUser', 'false');
+            localStorage.setItem('rawIsNewUserValue', 'false');
+          }
+          
+          // Set auth flags
+          TokenService.forceAuthSuccess();
+          
+          // Wait a bit to ensure tokens are stored
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Redirect based on whether user is new or not
+          if (isNewUser) {
+            console.log('OAuthCallback: Redirecting new user to profile creation via router.push');
+            router.push('/profile/new');
+          } else {
+            console.log('OAuthCallback: Redirecting existing user to dashboard via router.push');
+            router.push('/dashboard');
+          }
+          return;
+        }
+        
+        // If we don't have tokens directly, but have an auth code,
+        // exchange it for tokens via backend endpoint
+        if (code) {
+          console.log('OAuthCallback: Exchanging code for tokens');
           
           try {
-            // STEP 0: Reset auth check counter to prevent redirect loops
-            sessionStorage.setItem('auth_check_count', '0');
-            
-            // STEP 1: Clear any existing tokens first to ensure a clean state
-            // This is important if the callback is hit multiple times or with stale data.
-            TokenService.clearTokens();
-            console.log('Auth callback: Cleared old tokens');
-            
-            // STEP 2: Set critical auth flags BEFORE storing tokens
-            // This helps prevent race conditions where validation might occur before storage completes.
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('auth_successful', 'true');
-              sessionStorage.setItem('auth_successful', 'true'); // For good measure
-              localStorage.setItem('auth_timestamp', Date.now().toString());
-              // Block auth redirect checks temporarily to give time for this page to complete.
-              localStorage.setItem('block_auth_redirect', 'true');
-              localStorage.setItem('block_until', (Date.now() + 15000).toString()); // Block for 15 seconds
-              console.log('Auth callback: Set auth flags to prevent redirect loops and allow token processing');
-            }
-            
-            // STEP 3: Use TokenService to set tokens. This is the canonical way.
-            // TokenService handles localStorage, sessionStorage, and js-cookie with consistent security settings.
-            console.log('Auth callback: Setting tokens with TokenService...');
-            const storedAccessToken = TokenService.setAccessToken(accessToken);
-            const storedRefreshToken = TokenService.setRefreshToken(refreshToken);
-
-            // Log document.cookie immediately after TokenService calls
-            if (typeof document !== 'undefined') {
-              console.log('Auth callback: document.cookie AFTER TokenService.setTokens:', document.cookie);
-            }
-
-            if (storedAccessToken && storedRefreshToken) {
-                console.log('Auth callback: TokenService successfully set tokens.');
-            } else {
-                console.error('Auth callback: TokenService FAILED to set tokens. This is critical.');
-                // Fallback: Try to set them directly in localStorage if TokenService failed.
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('accessToken', accessToken);
-                    localStorage.setItem('refreshToken', refreshToken);
-                    console.warn('Auth callback: Used direct localStorage as TokenService fallback.');
-                }
-            }
-            
-            // Also store user info if available
-            if (typeof window !== 'undefined') {
-                if (userId) localStorage.setItem('userId', userId);
-                if (email) localStorage.setItem('userEmail', email);
-            }
-            
-            // STEP 4: Short delay to ensure asynchronous operations can settle.
-            // Especially if TokenService or underlying cookie/storage mechanisms have async aspects.
-            await new Promise(resolve => setTimeout(resolve, 300)); // Reduced delay
-            
-            // STEP 5: Verify tokens were actually stored by TokenService's getter
-            const verifiedAccessToken = TokenService.getAccessToken();
-            const verifiedRefreshToken = TokenService.getRefreshToken();
-            
-            console.log('Auth callback: Tokens storage verification (via TokenService.getAccessToken):', {
-              hasVerifiedAccessToken: !!verifiedAccessToken,
-              hasVerifiedRefreshToken: !!verifiedRefreshToken,
-              verifiedAccessTokenPreview: verifiedAccessToken ? `${verifiedAccessToken.substring(0, 10)}...` : 'MISSING',
-              originalAccessTokenPreview: accessToken ? `${accessToken.substring(0,10)}...` : 'N/A'
+            const response = await fetch('/api/auth/google/callback', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ code }),
             });
             
-            if (!verifiedAccessToken) {
-              console.warn('Auth callback: Access Token storage verification FAILED. The token might not be available for API calls.');
-              // As an emergency measure, ensure auth flags are strongly set.
-              TokenService.forceAuthSuccess(); 
-              setError('Token storage verification failed. Please try logging in again. If the issue persists, contact support.');
-              // Do not proceed to redirect if tokens couldn't be verified.
-              // Let user see the error and debug info.
-              setIsProcessing(false); 
-              return; 
+            if (!response.ok) {
+              throw new Error(`HTTP error: ${response.status}`);
             }
             
-            // Update debug info with verification results
-            setDebugInfo(prev => ({ 
-              ...prev, 
-              storage: { 
-                localStorage: {
-                  accessToken: localStorage.getItem('accessToken')?.substring(0, 10) + '...',
-                  refreshToken: localStorage.getItem('refreshToken')?.substring(0, 10) + '...',
-                  authSuccessful: localStorage.getItem('auth_successful'),
-                  authTimestamp: localStorage.getItem('auth_timestamp')
-                },
-                sessionStorage: {
-                  accessToken: sessionStorage.getItem('accessToken')?.substring(0, 10) + '...',
-                  refreshToken: sessionStorage.getItem('refreshToken')?.substring(0, 10) + '...'
-                },
-                cookies: {
-                  accessToken: Cookies.get('accessToken')?.substring(0, 10) + '...',
-                  refreshToken: Cookies.get('refreshToken')?.substring(0, 10) + '...',
-                  authSuccessful: Cookies.get('auth_successful')
-                },
-                tokenService: {
-                  accessToken: !!verifiedAccessToken,
-                  refreshToken: !!verifiedRefreshToken
-                }
-              }
-            }));
+            const data = await response.json();
+            console.log('OAuthCallback: Exchange response', { 
+              hasAccessToken: !!data.access_token,
+              hasEmail: !!data.email,
+              isNewUser: data.is_new_user
+            });
             
-            // STEP 6: Mark tokens as successfully saved
-            setTokensSaved(true);
-            setIsProcessing(false);
-            console.log('Auth callback: Token handling complete, preparing redirect to /dashboard');
+            // Store tokens
+            TokenService.setAccessToken(data.access_token);
+            TokenService.setRefreshToken(data.refresh_token);
             
-            // STEP 9: Redirect to dashboard after all token handling is done
-            // Use a slightly longer delay to ensure storage is complete and any UI updates render.
-            setTimeout(() => {
-              if (!redirectTriggered) { // Prevent multiple redirects
-                console.log('Auth callback: Redirecting to dashboard now...');
-                setRedirectTriggered(true);
-                // Before redirect, ensure auth redirect block is lifted or will expire soon
-                localStorage.removeItem('block_auth_redirect'); 
-                localStorage.removeItem('block_until');
-                window.location.href = '/dashboard'; // Full page navigation
-              }
-            }, 1000); // Reduced delay a bit
-          } catch (error) {
-            console.error('Auth callback: Error storing tokens:', error);
-            setError('Error storing tokens: ' + String(error));
-            setIsProcessing(false);
+            // Store user email
+            if (data.email) {
+              localStorage.setItem('user_email', data.email);
+              document.cookie = `email=${data.email};path=/;max-age=86400`;
+            }
             
-            // Force auth flags anyway
+            // Set the isNewUser flag
+            if (data.is_new_user) {
+              console.log('OAuthCallback: Setting isNewUser flag to true from API response');
+              localStorage.setItem('isNewUser', 'true');
+              localStorage.setItem('rawIsNewUserValue', 'true');
+            } else {
+              localStorage.setItem('isNewUser', 'false');
+              localStorage.setItem('rawIsNewUserValue', 'false');
+            }
+            
+            // Set auth flags
             TokenService.forceAuthSuccess();
-          }
-        } else {
-          console.error('Auth callback: Missing token data');
-          setError('Missing token data in URL');
-          setIsProcessing(false);
-          
-          // Check if we have tokens in cookies or localStorage already
-          const existingAccessToken = TokenService.getAccessToken();
-          if (existingAccessToken) {
-            console.log('Auth callback: Found existing tokens, redirecting to dashboard');
-            // Force auth flags to prevent redirect issues
-            TokenService.forceAuthSuccess();
-            setTimeout(() => window.location.replace('/dashboard'), 1000);
+            
+            // Wait a bit to ensure tokens are stored
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Redirect based on whether user is new or not
+            if (data.is_new_user) {
+              console.log('OAuthCallback: Redirecting new user to profile creation via router.push (after code exchange)');
+              router.push('/profile/new');
+            } else {
+              console.log('OAuthCallback: Redirecting existing user to dashboard via router.push (after code exchange)');
+              router.push('/dashboard');
+            }
+            return;
+          } catch (exchangeError) {
+            console.error('OAuthCallback: Error exchanging code for tokens:', exchangeError);
+            setError('Đã xảy ra lỗi khi xử lý đăng nhập. Vui lòng thử lại.');
+            router.push('/login');
+            return;
           }
         }
-      } catch (mainError) {
-        console.error('Auth callback: Main process error:', mainError);
-        setError('Main process error: ' + String(mainError));
-        setIsProcessing(false);
         
-        // Try to force auth flags even if there was an error
-        try {
-          TokenService.forceAuthSuccess();
-        } catch (e) {
-          console.error('Auth callback: Failed to force auth flags:', e);
-        }
+        // If we reach here, we don't have tokens or code
+        console.error('OAuthCallback: No tokens or code found');
+        setError('Không tìm thấy mã xác thực. Vui lòng thử lại.');
+        router.push('/login');
+      } catch (error) {
+        console.error('OAuthCallback: Error handling callback:', error);
+        setError('Đã xảy ra lỗi khi xử lý đăng nhập. Vui lòng thử lại.');
+        router.push('/login');
+      } finally {
+        setIsProcessing(false);
       }
     };
-
-    // Execute immediately
-    processCallback();
-  }, [searchParams]);
-
-  const handleManualRedirect = () => {
-    // Force auth flags before redirecting
-    TokenService.forceAuthSuccess();
     
-    // Reset auth check counter 
-    sessionStorage.setItem('auth_check_count', '0');
-    
-    // Use more direct approaches to set the most vital information
-    try {
-      // Get tokens from URL again just in case
-      const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
-      
-      if (accessToken && refreshToken) {
-        console.log('Manual redirect: Setting tokens directly');
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        sessionStorage.setItem('accessToken', accessToken);
-        document.cookie = `accessToken=${accessToken}; path=/; max-age=86400`;
-      }
-    } catch (e) {
-      console.error('Error in manual redirect:', e);
-    }
-    
-    window.location.href = '/dashboard';
-  };
-
+    handleCallback();
+  }, [router, searchParams]);
+  
   return (
-    <Container size="md" my="xl">
-      <Center style={{ flexDirection: 'column', minHeight: '70vh' }}>
-        <Paper shadow="md" p="xl" radius="md" withBorder style={{ width: '100%', maxWidth: 500 }}>
-          <Title order={3} mb="md">Đang xử lý đăng nhập...</Title>
-          {isProcessing ? (
-            <Center>
-              <Loader size="lg" />
-            </Center>
-          ) : error ? (
-            <>
-              <Text color="red" mb="md">Lỗi: {error}</Text>
-              <Button onClick={handleManualRedirect} mt="md" fullWidth>
-                Thử chuyển hướng thủ công đến Dashboard
-              </Button>
-            </>
-          ) : (
-            <>
-              <Text color="green" mb="md" ta="center">Xác thực thành công! {tokensSaved ? '✓ Đã lưu token' : ''}</Text>
-              {redirectTriggered ? (
-                <Loader size="sm" m="auto" />
-              ) : (
-                <Button onClick={handleManualRedirect} mt="md" fullWidth>
-                  Nhấn vào đây nếu không tự động chuyển hướng
-                </Button>
-              )}
-            </>
-          )}
-          
-          <Text mt="md" ta="center" size="sm" c="dimmed">
-            Vui lòng đợi trong khi chúng tôi xác thực thông tin.
+    <Container size="xs" my="xl">
+      <Center mt="xl">
+        <div style={{ textAlign: 'center' }}>
+          <Loader size="lg" />
+          <Text mt="md">
+            {error || 'Đang xử lý đăng nhập...'}
           </Text>
-        </Paper>
-        
-        {/* Debug information */}
-        <Container mt={50} style={{ maxWidth: '100%' }}>
-          <Title order={5} mb="sm">Thông tin gỡ lỗi:</Title>
-          <Code block style={{ maxHeight: '300px', overflow: 'auto' }}>
-            {JSON.stringify(debugInfo, null, 2)}
-          </Code>
-        </Container>
+        </div>
       </Center>
     </Container>
   );

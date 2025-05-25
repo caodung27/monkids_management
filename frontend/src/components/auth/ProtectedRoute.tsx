@@ -8,7 +8,7 @@ import { checkTokenAndRefreshIfNeeded } from '@/api/apiService';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRoles?: ('admin' | 'teacher')[];
+  requiredRoles?: ('ADMIN' | 'USER')[];
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
@@ -39,11 +39,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       
       // Check if user has required role
       if (user) {
-        const hasRequiredRole = requiredRoles.some(role => {
-          if (role === 'admin') return user.is_admin;
-          if (role === 'teacher') return user.is_teacher;
-          return false;
-        });
+        const hasRequiredRole = requiredRoles.some(role => user.role === role);
         
         if (!hasRequiredRole) {
           console.log('ProtectedRoute: User lacks required role, redirecting to dashboard');

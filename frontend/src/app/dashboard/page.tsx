@@ -1,18 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, SimpleGrid, Text, rem, Group, Title, Button, LoadingOverlay, Grid, Paper, Divider, Flex, Box, Badge, Stack, Tabs } from '@mantine/core';
+import { Card, SimpleGrid, Text, rem, Group, Title, Button, LoadingOverlay, Grid, Paper, Divider, Flex, Box, Badge, Stack, Tabs, Container } from '@mantine/core';
 import { IconAdjustments, IconDatabaseSearch, IconUsers, IconSchool, IconChartBar, IconCircleCheck, IconCircleX, IconCurrencyDollar, IconUsersGroup, IconCalendarStats, IconChartPie, IconClockHour4 } from '@tabler/icons-react';
 import Link from 'next/link';
-import { studentApi, TokenService } from '@/api/apiService';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '@/store/store';
-import { setTeachers } from '@/store/slices/teachersSlice';
-import dynamic from 'next/dynamic';
-import { teacherApi } from '@/api/apiService';
+import { studentApi, teacherApi, statsApi } from '@/api/apiService';
+import { useTeachers } from '@/api/hooks/useTeachers';
 import { Bar, Pie, Line } from 'react-chartjs-2';
 import { Chart, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, PointElement, LineElement } from 'chart.js';
 import { Student } from '@/types';
+import { StatsCard } from '@/components/StatsCard';
 Chart.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, PointElement, LineElement);
 
 // Navigation feature cards
@@ -20,13 +17,13 @@ const features = [
   {
     title: 'Quản lý học sinh',
     description: 'Danh sách học sinh, thông tin cá nhân, học phí',
-    icon: IconUsers,
+    icon: IconSchool,
     link: '/dashboard/students',
   },
   {
     title: 'Quản lý giáo viên',
     description: 'Danh sách giáo viên, thông tin chấm công, lương',
-    icon: IconSchool,
+    icon: IconUsers,
     link: '/dashboard/teachers',
   },
   {
@@ -36,27 +33,6 @@ const features = [
     link: '/dashboard/attendance',
   },
 ];
-
-// Stats card component
-const StatsCard = ({ icon: Icon, title, value, color = 'blue', subtitle, diff }: { icon: any, title: string, value: string, color?: string, subtitle?: string, diff?: number }) => (
-  <Paper withBorder p="md" radius="md">
-    <Group justify="space-between">
-      <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-        {title}
-      </Text>
-      <Icon size={22} color={`var(--mantine-color-${color}-6)`} stroke={1.5} />
-    </Group>
-    <Group align="flex-end" gap="xs" mt={25}>
-      <Text fw={700} fz="xl">{value}</Text>
-      {diff !== undefined && (
-        <Text c={diff > 0 ? 'teal' : 'red'} fz="sm" fw={500}>
-          {diff > 0 ? '+' : ''}{diff}%
-        </Text>
-      )}
-    </Group>
-    {subtitle && <Text fz="xs" c="dimmed" mt={7}>{subtitle}</Text>}
-  </Paper>
-);
 
 interface PaymentStatus {
   name: string;
@@ -74,66 +50,88 @@ interface FinanceData {
   monthlyRevenue: { month: string; revenue: number }[];
 }
 
+interface MonthlyStats {
+  current: {
+    totalStudents: number;
+    totalTeachers: number;
+    totalFees: number;
+    totalSalaries: number;
+  };
+  previous: {
+    totalStudents: number;
+    totalTeachers: number;
+    totalFees: number;
+    totalSalaries: number;
+  };
+  diff: {
+    totalStudents: number;
+    totalTeachers: number;
+    totalFees: number;
+    totalSalaries: number;
+  };
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const dispatch = useDispatch();
-  const teachers = useSelector((state: RootState) => state.teachers.teachers);
+  const { teachers: initialTeachers, loading: teachersLoading } = useTeachers();
   const [activeTab, setActiveTab] = useState<string | null>('general');
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [attendance, setAttendance] = useState([]);
   const [fees, setFees] = useState<FeesData>({
     paymentPercentage: 0,
     paymentStatus: [],
   });
-  const [finance, setFinance] = useState<FinanceData | null>(null);
+  const [finance, setFinance] = useState<any>(null);
+  const [stats, setStats] = useState<MonthlyStats | null>(null);
   
   // Format currency for display
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency: 'VND',
-      maximumFractionDigits: 0
+      currency: 'VND'
     }).format(value);
   };
   
-  // On component mount, load data and ensure auth flags are set
+  // On component mount, load data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const teacherRes = await teacherApi.getAllTeachers(1, 100);
-        dispatch(setTeachers(teacherRes.results || []));
-        const studentRes = await studentApi.getAllStudents(1, 100);
-        setStudents(studentRes.data || []);
-        // Mock dữ liệu doanh thu, lương, trạng thái học phí
-        setFinance({
-          revenue: 120000000,
-          monthlyRevenue: [
-            { month: '01/2024', revenue: 100000000 },
-            { month: '02/2024', revenue: 120000000 },
-            { month: '03/2024', revenue: 110000000 },
-          ],
-        });
-        setFees({
-          paymentPercentage: 90,
-          paymentStatus: [
-            { name: 'Đã đóng', value: 90, color: '#4CAF50' },
-            { name: 'Chưa đóng', value: 10, color: '#F44336' },
-          ],
-        });
-      } catch (e) {
-        // handle error
+        const [studentsRes, teachersRes] = await Promise.all([
+          studentApi.getAllStudents(1, 1000),
+          teacherApi.getAllTeachers(1, 1000),
+          statsApi.getMonthlyStats()
+        ]);
+
+        if (studentsRes?.data) setStudents(studentsRes.data);
+        if (teachersRes?.data) setTeachers(teachersRes.data);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [dispatch]);
+  }, []);
+  
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await statsApi.getMonthlyStats();
+        setStats(data);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
   
   // Feature navigation cards
   const navigationCards = features.map((feature) => (
     <Link href={feature.link} key={feature.title} style={{ textDecoration: 'none' }}>
-      <Card shadow="md" radius="md" className="mantine-hover-card" padding="xl">
+      <Card shadow="md" radius="md" className="mantine-hover-card" padding="xl" h={200}>
         <feature.icon
           style={{ width: rem(50), height: rem(50) }}
           stroke={2}
@@ -164,11 +162,11 @@ export default function DashboardPage() {
   };
 
   const lineData = {
-    labels: finance?.monthlyRevenue.map(item => item.month) || [],
+    labels: finance?.monthlyRevenue.map((item: { month: string }) => item.month) || [],
     datasets: [
       {
         label: 'Doanh thu',
-        data: finance?.monthlyRevenue.map(item => item.revenue) || [],
+        data: finance?.monthlyRevenue.map((item: { revenue: number }) => item.revenue) || [],
         borderColor: '#1976d2',
         backgroundColor: 'rgba(25, 118, 210, 0.2)',
         tension: 0.4,
@@ -176,42 +174,56 @@ export default function DashboardPage() {
     ],
   };
 
+  const getCurrentMonthStats = (items: any[]) => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    return items.filter(item => {
+      const createdDate = new Date(item.created_at);
+      return createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
+    }).length;
+  };
+
+  const newStudentsCount = getCurrentMonthStats(students);
+  const newTeachersCount = getCurrentMonthStats(teachers);
+
   return (
-    <div style={{ position: 'relative' }}>
-      <LoadingOverlay visible={loading} overlayProps={{ blur: 2 }} />
-      
-      <Group align="center" mb={30}>
-        <div>
-          <Title order={1}>MẦM NON ĐỘC LẬP MONKIDS</Title>
-          <Text c="dimmed" size="lg">Hệ thống quản lý trường mầm non</Text>
-        </div>
-      </Group>
-      
-      {/* Stats Overview */}
+    <Container size="lg" mt="md">
+      <Title order={2} mb="md">Tổng quan</Title>
+
       <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md" mb={30}>
         <StatsCard 
-          icon={IconUsers} 
+          icon={IconSchool} 
           title="Tổng số học sinh" 
-          value={students.length.toString()} 
+          value={stats?.current.totalStudents.toString() || '0'} 
           color="blue" 
-          subtitle="So với tháng trước" 
-          diff={5}
+          subtitle={`${stats?.diff.totalStudents || 0} học sinh mới trong tháng`} 
+          diff={stats?.diff.totalStudents || 0}
         />
         <StatsCard 
-          icon={IconSchool} 
+          icon={IconUsers} 
           title="Giáo viên" 
-          value={teachers.length.toString()} 
+          value={stats?.current.totalTeachers.toString() || '0'} 
           color="green" 
-          subtitle="2 giáo viên mới" 
-          diff={20}
+          subtitle={`${stats?.diff.totalTeachers || 0} giáo viên mới trong tháng`} 
+          diff={stats?.diff.totalTeachers || 0}
         />
         <StatsCard 
           icon={IconCurrencyDollar} 
-          title="Doanh thu tháng" 
-          value={formatCurrency(finance?.revenue || 0)} 
+          title="Tổng học phí" 
+          value={formatCurrency(stats?.current.totalFees || 0)} 
           color="yellow" 
           subtitle="So với tháng trước" 
-          diff={3}
+          diff={stats?.diff.totalFees || 0}
+        />
+        <StatsCard 
+          icon={IconCurrencyDollar} 
+          title="Tổng lương" 
+          value={formatCurrency(stats?.current.totalSalaries || 0)} 
+          color="red" 
+          subtitle="So với tháng trước" 
+          diff={stats?.diff.totalSalaries || 0}
         />
       </SimpleGrid>
       
@@ -219,56 +231,6 @@ export default function DashboardPage() {
       <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="xl" mb={30}>
         {navigationCards}
       </SimpleGrid>
-      
-      {/* Data Visualization Tabs */}
-      <Tabs value={activeTab} onChange={setActiveTab} mb="xl">
-        <Tabs.List>
-          <Tabs.Tab value="teachers" leftSection={<IconSchool size={16} />}>
-            Giáo viên
-          </Tabs.Tab>
-          <Tabs.Tab value="students" leftSection={<IconUsers size={16} />}>
-            Học sinh
-          </Tabs.Tab>
-        </Tabs.List>
-
-        <Tabs.Panel value="teachers" pt="xs">
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            {/* Student Distribution by Class */}
-            <Paper withBorder p="md" radius="md" h={400}>
-              <Title order={3} mb="md">Phân bổ giáo viên theo chức vụ</Title>
-              {/* Chart removed */}
-            </Paper>
-            
-            {/* Monthly Revenue */}
-            <Paper withBorder p="md" radius="md" h={400}>
-              <Title order={3} mb="md">Tiền lương theo tháng</Title>
-              {/* Chart removed */}
-            </Paper>
-            
-            {/* Fee Payment Status */}
-            <Paper withBorder p="md" radius="md" h={400}>
-              <Title order={3} mb="md">Chấm công giáo viên</Title>
-              {/* Chart removed */}
-            </Paper>
-          </SimpleGrid>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="students" pt="xs">
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            {/* Student Distribution by Class */}
-            <Paper withBorder p="md" radius="md" h={400}>
-              <Title order={3} mb="md">Phân bổ học sinh theo lớp</Title>
-              {/* Chart removed */}
-            </Paper>
-            
-            {/* Fee Payment Status */}
-            <Paper withBorder p="md" radius="md" h={400}>
-              <Title order={3} mb="md">Trạng thái đóng học phí</Title>
-              {/* Chart removed */}
-            </Paper>
-          </SimpleGrid>
-        </Tabs.Panel>
-      </Tabs>
-    </div>
+    </Container>
   );
 } 

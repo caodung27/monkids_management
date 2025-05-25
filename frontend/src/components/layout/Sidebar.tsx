@@ -18,15 +18,12 @@ interface NavItem {
   icon: typeof IconHome;
   label: string;
   href: string;
-  requiredRoles?: ('admin' | 'teacher')[];
+  requiredRoles?: ('ADMIN' | 'USER')[];
 }
 
 export default function Sidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
-
-  const isAdmin = user?.is_admin;
-  const isTeacher = user?.is_teacher;
 
   const navItems: NavItem[] = [
     { icon: IconHome, label: 'Trang chủ', href: '/dashboard' },
@@ -40,11 +37,7 @@ export default function Sidebar() {
       return true;
     }
     
-    return item.requiredRoles.some(role => {
-      if (role === 'admin') return isAdmin;
-      if (role === 'teacher') return isTeacher;
-      return false;
-    });
+    return item.requiredRoles.some(role => user?.role === role);
   });
 
   return (

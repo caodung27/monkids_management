@@ -6,7 +6,13 @@ import Header from '@/components/layout/Header';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Sidebar from '@/components/layout/Sidebar';
 import { TokenService } from '@/api/apiService';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+
+declare global {
+  interface Window {
+    __TEMP_EMAIL?: string;
+  }
+}
 
 export default function DashboardLayout({
   children,
@@ -16,6 +22,7 @@ export default function DashboardLayout({
   const theme = useMantineTheme();
   const [opened, setOpened] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
   const redirectBlocker = useRef(false);
@@ -28,12 +35,58 @@ export default function DashboardLayout({
     const preventUnwantedRedirect = () => {
       if (redirectBlocker.current) return;
       
+      // Check for force profile redirect flag
+      if (typeof window !== 'undefined' && localStorage.getItem('FORCE_PROFILE_REDIRECT') === 'true') {
+        console.log('Dashboard: Force redirect to profile creation detected');
+        
+        // Add timestamp check to prevent redirect loops
+        const redirectTimestamp = parseInt(localStorage.getItem('profile_redirect_timestamp') || '0');
+        const currentTime = Date.now();
+        
+        // Only redirect if it's been more than 2 seconds since last redirect attempt
+        if (currentTime - redirectTimestamp > 2000) {
+          localStorage.setItem('profile_redirect_timestamp', currentTime.toString());
+          router.replace('/profile/new');
+        } else {
+          console.log('Dashboard: Skipping redirect - too soon after last redirect attempt');
+        }
+        return;
+      }
+      
       // Check for recent oauth login
       const isRecentOAuth = typeof window !== 'undefined' && (
         localStorage.getItem('auth_successful') === 'true' ||
         sessionStorage.getItem('auth_successful') === 'true' ||
         document.cookie.includes('auth_redirect=true')
       );
+      
+      // Check if user is new - if so, we should NOT block redirects
+      const isNewUser = typeof window !== 'undefined' && 
+        (localStorage.getItem('isNewUser') === 'true' || 
+         localStorage.getItem('rawIsNewUserValue') === 'true');
+      
+      // If user is new, we should redirect to profile creation with timestamp check
+      if (isNewUser) {
+        console.log('Dashboard: User is new, redirecting to profile creation');
+        
+        // Set a stronger flag that won't be overridden
+        localStorage.setItem('FORCE_PROFILE_REDIRECT', 'true');
+        
+        // Add timestamp check to prevent redirect loops
+        const redirectTimestamp = parseInt(localStorage.getItem('profile_redirect_timestamp') || '0');
+        const currentTime = Date.now();
+        
+        if (currentTime - redirectTimestamp > 2000) { 
+          localStorage.setItem('profile_redirect_timestamp', currentTime.toString());
+          // Prevent any interference
+          localStorage.removeItem('block_auth_redirect');
+          localStorage.removeItem('block_until');
+          router.replace('/profile/new');
+        } else {
+          console.log('Dashboard: Skipping redirect - too soon after last redirect attempt');
+        }
+        return;
+      }
       
       // Block redirects for 5 seconds after OAuth login
       if (isRecentOAuth) {
@@ -57,86 +110,50 @@ export default function DashboardLayout({
     window.addEventListener('load', preventUnwantedRedirect);
     
     return () => window.removeEventListener('load', preventUnwantedRedirect);
-  }, []);
+  }, [router]);
 
   // Extra check to verify tokens are present
   useEffect(() => {
-    // Skip if already checked
-    if (hasCheckedStorage) return;
+    // Skip if already checked or on public paths
+    if (hasCheckedStorage || 
+        pathname?.startsWith('/login') || 
+        pathname?.startsWith('/register') ||
+        pathname?.startsWith('/auth/')) {
+      setLoading(false);
+      return;
+    }
     
-    const checkTokens = async () => {
+    // Add automatic timeout to prevent indefinite loading
+    const autoTimeoutId = setTimeout(() => {
+      if (loading) {
+        console.log('Dashboard Layout: Auto-timeout triggered, forcing loading to false after 10 seconds');
+        setLoading(false);
+        setHasCheckedStorage(true);
+      }
+    }, 10000);
+    
+    const checkTokensAndUserStatus = async () => {
       try {
-        // Use the comprehensive token check function
-        const tokensExist = TokenService.checkTokensExist();
+        // Check for tokens immediately
+        const hasAccessToken = TokenService.getAccessToken();
+        const hasRefreshToken = TokenService.getRefreshToken();
         
-        // Check if coming from auth callback or has auth flags
-        const isFromAuthCallback = typeof window !== 'undefined' && (
-          sessionStorage.getItem('auth_successful') === 'true' || 
-          localStorage.getItem('auth_successful') === 'true' ||
-          sessionStorage.getItem('auth_redirect_pending') === 'true' ||
-          sessionStorage.getItem('oauth_initiated') !== null
-        );
-        
-        // Check blocking flags
-        const blockRedirect = localStorage.getItem('block_auth_redirect') === 'true';
-        const blockUntil = parseInt(localStorage.getItem('block_until') || '0');
-        const shouldBlock = blockRedirect && blockUntil > Date.now();
-        
-        console.log('Dashboard Layout: Checking tokens', {
-          tokensExist,
-          isFromAuthCallback,
-          blockRedirect,
-          shouldBlock,
-          localStorage: {
-            accessToken: localStorage.getItem('accessToken'),
-            refreshToken: localStorage.getItem('refreshToken'),
-            auth_successful: localStorage.getItem('auth_successful')
-          }
+        console.log('Dashboard Layout: Checking tokens:', { 
+          hasAccessToken: !!hasAccessToken,
+          hasRefreshToken: !!hasRefreshToken,
         });
         
-        // Clear the pending redirect flag
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('auth_redirect_pending');
-        }
-        
-        // If we have tokens or just came from auth callback, allow access
-        if (tokensExist || isFromAuthCallback || shouldBlock) {
-          console.log('Dashboard Layout: Authentication verified or redirects blocked');
-          
-          // Force auth success to prevent future redirects
-          TokenService.forceAuthSuccess();
-          
+        // If we have tokens, allow access
+        if (hasAccessToken || hasRefreshToken) {
+          console.log('Dashboard Layout: Tokens found, allowing access');
           setLoading(false);
           setHasCheckedStorage(true);
-        } else {
-          // Wait longer (3 seconds) and check again before redirecting
-          setTimeout(() => {
-            // Use the comprehensive token check function again
-            const retryTokensExist = TokenService.checkTokensExist();
-            
-            // Recehck all flags
-            const retryAuth = typeof window !== 'undefined' && (
-              sessionStorage.getItem('auth_successful') === 'true' || 
-              localStorage.getItem('auth_successful') === 'true'
-            );
-            const retryBlockRedirect = localStorage.getItem('block_auth_redirect') === 'true';
-            const retryBlockUntil = parseInt(localStorage.getItem('block_until') || '0');
-            const retryShouldBlock = retryBlockRedirect && retryBlockUntil > Date.now();
-            
-            if (retryTokensExist || retryAuth || retryShouldBlock) {
-              console.log('Dashboard Layout: Tokens found on retry or redirects blocked');
-              
-              // Force auth success flags to prevent future redirects
-              TokenService.forceAuthSuccess();
-              
-              setLoading(false);
-              setHasCheckedStorage(true);
-            } else {
-              console.log('Dashboard Layout: No tokens found after retry, redirecting to login');
-              router.replace('/login');
-            }
-          }, 3000); // Increased from 1500ms to 3000ms
+          return;
         }
+        
+        // If no tokens, redirect to login
+        console.log('Dashboard Layout: No tokens, redirecting to login');
+        router.replace('/login');
       } catch (error) {
         console.error('Dashboard Layout: Error checking tokens', error);
         setLoading(false);
@@ -144,56 +161,52 @@ export default function DashboardLayout({
       }
     };
     
-    checkTokens();
-  }, [router, hasCheckedStorage]);
+    checkTokensAndUserStatus();
+    
+    return () => {
+      clearTimeout(autoTimeoutId);
+    };
+  }, [hasCheckedStorage, router, loading, pathname]);
 
-  // Handle manual navigation to dashboard if loading takes too long
+  // Manual continue function for error recovery
   const handleManualContinue = () => {
     setLoading(false);
     setHasCheckedStorage(true);
-    
-    // Set flag to block redirects
-    localStorage.setItem('block_auth_redirect', 'true');
-    localStorage.setItem('block_until', (Date.now() + 10000).toString());
   };
-
-  if (loading) {
-    return (
-      <Center style={{ height: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Loader size="xl" />
-          <Button 
-            onClick={handleManualContinue} 
-            style={{ marginTop: '20px' }}
-            variant="light"
-          >
-            Tiếp tục tới trang chủ
-          </Button>
-        </div>
-      </Center>
-    );
-  }
 
   return (
     <ProtectedRoute>
       <AppShell
-        header={{ height: 60 }}
-        navbar={{
-          width: 300,
-          breakpoint: 'sm',
-          collapsed: { mobile: !opened },
-        }}
         padding="md"
+        navbar={{ width: 300, breakpoint: 'sm', collapsed: { mobile: !opened } }}
+        header={{ height: 60 }}
       >
-        <Header opened={opened} toggle={toggleNav} />
+        <AppShell.Header>
+          <Header opened={opened} toggle={toggleNav} />
+        </AppShell.Header>
+
         <AppShell.Navbar p="md">
           <Sidebar />
         </AppShell.Navbar>
-        
+
         <AppShell.Main>
-          {children}
+          {loading ? (
+            <Center style={{ height: '80vh', flexDirection: 'column' }}>
+              <Loader size="xl" variant="dots" />
+              <Text mt="md">Đang kiểm tra xác thực...</Text>
+              <Button 
+                onClick={handleManualContinue} 
+                variant="light" 
+                mt="xl"
+              >
+                Tiếp tục tới trang chủ
+              </Button>
+            </Center>
+          ) : (
+            children
+          )}
         </AppShell.Main>
       </AppShell>
     </ProtectedRoute>
   );
-} 
+}

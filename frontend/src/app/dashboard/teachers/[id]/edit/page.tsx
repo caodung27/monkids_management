@@ -2,13 +2,25 @@
 
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
+import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea, MultiSelect, Badge } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { teacherApi } from '@/api/apiService';
 import { Teacher, TeacherApiPayload } from '@/types';
 import { IconArrowLeft, IconDeviceFloppy } from '@tabler/icons-react';
 import { formatVND } from '@/utils/formatters';
 import { notifications } from '@mantine/notifications';
+
+interface RoleOption {
+  value: string;
+  label: string;
+  color: string;
+}
+
+const ROLE_OPTIONS: RoleOption[] = [
+  { value: 'Quản lý', label: 'Quản lý', color: 'blue' },
+  { value: 'Giáo viên', label: 'Giáo viên', color: 'green' },
+  { value: 'Đầu bếp', label: 'Đầu bếp', color: 'orange' },
+];
 
 export default function EditTeacherPage() {
   const params = useParams();
@@ -31,8 +43,13 @@ export default function EditTeacherPage() {
   useEffect(() => {
     const fetchTeacherData = async () => {
       try {
-        const teacher = await teacherApi.getTeacherById(teacherId);
-        form.setValues(teacher);
+        const teacher = await teacherApi.getTeacher(teacherId);
+        // Split the role string into an array
+        const roles = teacher.role.split(',').map((role: string) => role.trim());
+        form.setValues({
+          ...teacher,
+          role: roles,
+        });
 
         // Store initial source values after form is populated
         initialExtraTeachingDays.current = teacher.extra_teaching_days;
@@ -78,10 +95,11 @@ export default function EditTeacherPage() {
     const paid_amount = Number(v_paid_amount) || 0;
     const new_students_list = Number(v_new_students_list) || 0;
 
-    // Calculate received salary
+    // Calculate received salary using the updated formula
+    const totalWorkDaysAndAbsence = teaching_days + absence_days;
     const calculated_received_salary =
-      teaching_days > 0
-        ? Math.round((base_salary / teaching_days) * Math.max(0, teaching_days - absence_days))
+      totalWorkDaysAndAbsence > 0
+        ? Math.round((base_salary / totalWorkDaysAndAbsence) * teaching_days)
         : 0;
 
     // Determine final_extra_salary
@@ -168,14 +186,12 @@ export default function EditTeacherPage() {
 
   const handleSubmit = async (values: Teacher) => {
     try {
-      // Assuming 'id' might be part of the Teacher type from form.values if fetched initially
-      // It should not be in the PUT payload body.
-      const { id, ...formValues } = values; 
+      const { id, ...formValues } = values;
 
       const apiPayload: TeacherApiPayload = {
-        name: formValues.name,
-        role: formValues.role,
-        phone: formValues.phone === '' ? null : formValues.phone, // Ensure empty string becomes null if appropriate
+        ...formValues,
+        role: (formValues.role as unknown as string[]).join(', '),
+        phone: formValues.phone === '' ? null : formValues.phone,
         base_salary: (Number(formValues.base_salary) || 0).toFixed(2),
         teaching_days: Number(formValues.teaching_days) || 0,
         absence_days: Number(formValues.absence_days) || 0,
@@ -192,7 +208,7 @@ export default function EditTeacherPage() {
         new_students_list: String(Number(formValues.new_students_list) || 0),
         paid_amount: (Number(formValues.paid_amount) || 0).toFixed(2),
         total_salary: (Number(formValues.total_salary) || 0).toFixed(2),
-        note: formValues.note === '' ? null : formValues.note, // Ensure empty string becomes null
+        note: formValues.note === '' ? null : formValues.note,
       };
 
       await teacherApi.updateTeacher(teacherId, apiPayload);
@@ -204,8 +220,11 @@ export default function EditTeacherPage() {
       router.push('/dashboard/teachers');
     } catch (error) {
       console.error('Error saving teacher:', error);
-      // Consider more specific error feedback if possible, e.g., from error.response.data
-      alert('Có lỗi khi lưu thông tin giáo viên. Vui lòng thử lại sau.');
+      notifications.show({
+        title: 'Lỗi',
+        message: 'Có lỗi khi lưu thông tin giáo viên. Vui lòng thử lại sau.',
+        color: 'red',
+      });
     }
   };
 
@@ -256,18 +275,28 @@ export default function EditTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              <Select
+              <MultiSelect
                 label="Vai trò"
                 placeholder="Chọn vai trò"
                 required
-                data={[
-                  { value: 'GV', label: 'Giáo viên' },
-                  { value: 'Quản lý', label: 'Quản lý' },
-                  { value: 'Quản lý + GV', label: 'Quản lý + Giáo viên' },
-                  { value: 'Đầu bếp', label: 'Đầu bếp' },
-                ]}
+                data={ROLE_OPTIONS}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('role')}
+                styles={{
+                  input: {
+                    minHeight: '36px',
+                  },
+                }}
+                renderOption={({ option, ...others }) => {
+                  const roleOption = ROLE_OPTIONS.find(opt => opt.value === option.value);
+                  return (
+                    <div {...others}>
+                      <Badge color={roleOption?.color} variant="filled" size="sm" mr="xs">
+                        {option.label}
+                      </Badge>
+                    </div>
+                  );
+                }}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
@@ -300,7 +329,7 @@ export default function EditTeacherPage() {
                 placeholder="Nhập số ngày dạy"
                 min={0}
                 max={31}
-                decimalScale={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('teaching_days')}
               />
@@ -311,7 +340,7 @@ export default function EditTeacherPage() {
                 placeholder="Nhập số ngày vắng"
                 min={0}
                 max={31}
-                decimalScale={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('absence_days')}
               />
@@ -338,7 +367,7 @@ export default function EditTeacherPage() {
                 label="Số ngày dạy thêm"
                 placeholder="Nhập số ngày dạy thêm"
                 min={0}
-                decimalScale={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('extra_teaching_days')}
               />
@@ -402,7 +431,7 @@ export default function EditTeacherPage() {
                 label="Số buổi dạy KNS"
                 placeholder="Nhập số buổi KNS"
                 min={0}
-                decimalScale={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('skill_sessions')}
               />
@@ -425,7 +454,7 @@ export default function EditTeacherPage() {
                 label="Số buổi dạy Tiếng Anh"
                 placeholder="Nhập số buổi TA"
                 min={0}
-                decimalScale={0}
+                decimalScale={1}
                 onKeyDown={handleKeyDown}
                 {...form.getInputProps('english_sessions')}
               />

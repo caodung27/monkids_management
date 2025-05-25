@@ -35,7 +35,7 @@ Tạo file `.env.local` trong thư mục gốc của dự án với nội dung s
 
 ```
 # API URL
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8080/
 
 # Google OAuth2 Client ID
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id-goes-here

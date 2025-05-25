@@ -22,6 +22,7 @@ export interface Student {
 }
 
 export interface Teacher {
+  teacher_no: number;
   id: string;
   name: string;
   role: string;
@@ -49,20 +50,20 @@ export interface StudentApiUpdatePayload {
   name: string;
   classroom: string;
   birthdate: string | null;
-  base_fee: string;
+  base_fee: number;
   discount_percentage: number;
-  final_fee: string;
-  utilities_fee: string;
-  pt: string;
-  pm: string;
-  meal_fee: string;
-  eng_fee: string;
-  skill_fee: string;
-  student_fund: string;
-  facility_fee: string;
-  paid_amount: string;
-  total_fee: string;
-  remaining_amount: string;
+  final_fee: number;
+  utilities_fee: number;
+  pt: number;
+  pm: number;
+  meal_fee: number;
+  eng_fee: number;
+  skill_fee: number;
+  student_fund: number;
+  facility_fee: number;
+  paid_amount: number;
+  total_fee: number;
+  remaining_amount: number;
 } 
 
 export interface TeacherApiPayload {
@@ -88,11 +89,49 @@ export interface TeacherApiPayload {
   note?: string | null;
 }
 
-export interface ProfileData {
-  first_name: string;
-  last_name: string;
+export type ProfileData = {
+  id: string;
+  name: string;
   email: string;
-  profile_picture: string | null;
-  is_teacher: boolean;
-  is_admin: boolean;
+  phone: string;
+  address: string;
+  image: string | null;
+  role: string;
+  account_type?: string;
+  is_active?: boolean;
+  password?: string;
+};
+
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+
+export interface Notification {
+  id?: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  timeout?: number;
 }
+
+export interface UiState {
+  notifications: Notification[];
+  isDrawerOpen: boolean;
+}
+
+export interface GenerateMetadataOptions {
+  title: string;
+  description: string;
+  keywords?: string[];
+  ogImage?: string;
+  noIndex?: boolean;
+}
+
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
+
+export interface LogOptions {
+  level?: LogLevel;
+  context?: string;
+  data?: any;
+}
+
+export type CreateTeacherDto = Omit<Teacher, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateTeacherDto = Partial<CreateTeacherDto>;

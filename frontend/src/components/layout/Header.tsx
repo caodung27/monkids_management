@@ -25,6 +25,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDisclosure, useToggle } from '@mantine/hooks';
+import { authApi } from '@/api/apiService';
 
 interface HeaderProps {
   opened: boolean;
@@ -36,14 +37,15 @@ export default function Header({ opened, toggle }: HeaderProps) {
   const theme = useMantineTheme();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const [themeValue, toggleTheme] = useToggle(['light', 'dark']);
+  const profileId = user?.id;
 
   const handleLogout = async () => {
-    await logout();
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
-
-  const fullName = user?.first_name && user?.last_name 
-    ? `${user.first_name} ${user.last_name}`
-    : user?.email;
 
   return (
     <AppShell.Header p="md">
@@ -56,22 +58,20 @@ export default function Header({ opened, toggle }: HeaderProps) {
         </Group>
 
         <Group>
-          {isAuthenticated ? (
             <Menu shadow="md" width={200} position="bottom-end">
               <Menu.Target>
                 <Group gap={7} style={{ cursor: 'pointer' }}>
                   <Avatar
-                    src={user?.profile_picture || null}
-                    alt={fullName || 'User'}
+                    src={user?.image || null}
+                    alt={user?.name || 'User'}
                     color="blue"
                     radius="xl"
                     size={30}
                   >
-                    {user?.first_name?.[0] || user?.email?.[0] || 'U'}
                   </Avatar>
                   
                   <Text fw={500} size="sm" mr={3}>
-                    {fullName}
+                    {user?.name}
                   </Text>
                   <IconChevronDown size="1rem" />
                 </Group>
@@ -82,14 +82,14 @@ export default function Header({ opened, toggle }: HeaderProps) {
                 <Menu.Item
                   leftSection={<IconUserCircle style={{ width: rem(14), height: rem(14) }} />}
                   component={Link}
-                  href="/profile"
+                  href={`/profile/${profileId}`}
                 >
                   Hồ sơ cá nhân
                 </Menu.Item>
                 
                 <Menu.Item leftSection={<IconSun style={{ width: rem(14), height: rem(14) }} />}>
                   <Group justify="space-between">
-                    <Text fw={500} size="sm">Giao diện:</Text>
+                    <Text size="sm">Giao diện:</Text>
                     <Switch
                       checked={colorScheme === 'dark'}
                       onChange={() => setColorScheme(colorScheme === 'dark' ? 'light' : 'dark')}
@@ -110,16 +110,7 @@ export default function Header({ opened, toggle }: HeaderProps) {
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
-          ) : (
-            <Group>
-              <Button component={Link} href="/login" variant="subtle">
-                Login
-              </Button>
-              <Button component={Link} href="/register">
-                Register
-              </Button>
-            </Group>
-          )}
+          
         </Group>
       </Group>
     </AppShell.Header>

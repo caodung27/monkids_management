@@ -2,18 +2,10 @@
 
 import { useQuery, useMutation, QueryClient } from '@tanstack/react-query';
 import { teacherApi } from '@/api/apiService';
-import { useDispatch } from 'react-redux';
-import { addNotification } from '@/store/slices/uiSlice';
-import { 
-  setTeachers, 
-  setSelectedTeacher, 
-  setLoading, 
-  setError,
-  addTeacher,
-  updateTeacher,
-  deleteTeacher as deleteTeacherAction
-} from '@/store/slices/teachersSlice';
-import { Teacher } from '@/store/slices/teachersSlice';
+import { notifications } from '@mantine/notifications';
+import { useState, useEffect } from 'react';
+import { Teacher } from '@/types';
+import { createTeacherApiSchema, TeacherFormValues, teacherApiSchema } from '@/validations/teacherSchema';
 
 // Query keys
 export const teacherKeys = {
@@ -28,54 +20,80 @@ export const teacherKeys = {
  * Hook to fetch all teachers
  */
 export const useTeachers = () => {
-  const dispatch = useDispatch();
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalTeachers, setTotalTeachers] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+  const [totalPages, setTotalPages] = useState(1);
 
-  return useQuery({
-    queryKey: teacherKeys.lists(),
-    queryFn: async () => {
-      dispatch(setLoading(true));
-      try {
-        const data = await teacherApi.getAllTeachers();
-        dispatch(setTeachers(data));
-        return data;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi khi tải danh sách giáo viên';
-        dispatch(setError(errorMessage));
-        dispatch(addNotification({
-          title: 'Lỗi',
-          message: 'Không thể tải danh sách giáo viên. Vui lòng thử lại sau.',
-          type: 'error',
-        }));
-        throw new Error(errorMessage);
+  const fetchTeachers = async (page: number, pageSize: number = itemsPerPage) => {
+    setLoading(true);
+    try {
+      const response = await teacherApi.getAllTeachers(page, pageSize);
+      
+      if (response && response.data) {
+        setTeachers(response.data);
+        setTotalTeachers(response.totalElements);
+        setCurrentPage(response.currentPage);
+        setTotalPages(response.totalPages);
+      } else {
+        setTeachers([]);
+        setTotalTeachers(0);
       }
-    },
-  });
+    } catch (error) {
+      console.error('Error fetching teachers:', error);
+      setTeachers([]);
+      setTotalTeachers(0);
+      notifications.show({
+        title: 'Lỗi',
+        message: 'Không thể tải danh sách giáo viên. Vui lòng thử lại sau.',
+        color: 'red'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeachers(1, itemsPerPage);
+  }, [itemsPerPage]);
+
+  const handlePageChange = (page: number) => {
+    fetchTeachers(page, itemsPerPage);
+    window.scrollTo(0, 0);
+  };
+
+  const handlePageSizeChange = (value: string | null) => {
+    if (value) {
+      const newSize = parseInt(value);
+      setItemsPerPage(newSize);
+      setCurrentPage(1);
+    }
+  };
+
+  return {
+    teachers,
+    loading,
+    currentPage,
+    totalTeachers,
+    itemsPerPage,
+    totalPages,
+    handlePageChange,
+    handlePageSizeChange,
+    fetchTeachers
+  };
 };
 
 /**
  * Hook to fetch a single teacher by ID
  */
 export const useTeacher = (id: string) => {
-  const dispatch = useDispatch();
-  
   return useQuery({
     queryKey: teacherKeys.detail(id),
     queryFn: async () => {
-      dispatch(setLoading(true));
-      try {
-        const data = await teacherApi.getTeacherById(id);
-        dispatch(setSelectedTeacher(data));
-        return data;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi khi tải thông tin giáo viên';
-        dispatch(setError(errorMessage));
-        dispatch(addNotification({
-          title: 'Lỗi',
-          message: 'Không thể tải thông tin giáo viên. Vui lòng thử lại sau.',
-          type: 'error',
-        }));
-        throw new Error(errorMessage);
-      }
+      const data = await teacherApi.getTeacher(id);
+      return data;
     },
     enabled: !!id,
   });
@@ -85,30 +103,25 @@ export const useTeacher = (id: string) => {
  * Hook to create a new teacher
  */
 export const useCreateTeacher = (queryClient: QueryClient) => {
-  const dispatch = useDispatch();
-
   return useMutation({
-    mutationFn: async (formData: Teacher) => {
-      return await teacherApi.createTeacher(formData);
+    mutationFn: async (formData: TeacherFormValues) => {
+      const apiPayload = createTeacherApiSchema.parse(formData);
+      return await teacherApi.createTeacher(apiPayload);
     },
-    onSuccess: (data) => {
-      dispatch(addTeacher(data));
-      dispatch(addNotification({
+    onSuccess: () => {
+      notifications.show({
         title: 'Thành công',
         message: 'Giáo viên mới đã được thêm thành công!',
-        type: 'success',
-      }));
-      // Invalidate and refetch
+        color: 'green'
+      });
       queryClient.invalidateQueries({ queryKey: teacherKeys.lists() });
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Lỗi khi thêm giáo viên';
-      dispatch(setError(errorMessage));
-      dispatch(addNotification({
+      notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi xảy ra khi thêm giáo viên. Vui lòng thử lại.',
-        type: 'error',
-      }));
+        color: 'red'
+      });
     },
   });
 };
@@ -117,37 +130,32 @@ export const useCreateTeacher = (queryClient: QueryClient) => {
  * Hook to update an existing teacher
  */
 export const useUpdateTeacher = (queryClient: QueryClient) => {
-  const dispatch = useDispatch();
-
   return useMutation({
-    mutationFn: async ({ 
-      id, 
-      formData 
-    }: { 
-      id: string; 
-      formData: Teacher 
+    mutationFn: async ({
+      id,
+      formData
+    }: {
+      id: string;
+      formData: TeacherFormValues
     }) => {
-      return await teacherApi.updateTeacher(id, formData);
+      const apiPayload = teacherApiSchema.parse(formData);
+      return await teacherApi.updateTeacher(id, apiPayload);
     },
-    onSuccess: (data) => {
-      dispatch(updateTeacher(data));
-      dispatch(addNotification({
+    onSuccess: () => {
+      notifications.show({
         title: 'Thành công',
         message: 'Thông tin giáo viên đã được cập nhật thành công!',
-        type: 'success',
-      }));
-      // Invalidate and refetch
+        color: 'green'
+      });
       queryClient.invalidateQueries({ queryKey: teacherKeys.lists() });
       queryClient.invalidateQueries({ queryKey: teacherKeys.details() });
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Lỗi khi cập nhật giáo viên';
-      dispatch(setError(errorMessage));
-      dispatch(addNotification({
+      notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi khi lưu thông tin giáo viên. Vui lòng thử lại sau.',
-        type: 'error',
-      }));
+        color: 'red'
+      });
     },
   });
 };
@@ -156,28 +164,22 @@ export const useUpdateTeacher = (queryClient: QueryClient) => {
  * Hook to delete a teacher
  */
 export const useDeleteTeacher = (queryClient: QueryClient) => {
-  const dispatch = useDispatch();
-
   return useMutation({
     mutationFn: (teacherId: string) => teacherApi.deleteTeacher(teacherId),
-    onSuccess: (_, teacherId) => {
-      dispatch(deleteTeacherAction(teacherId));
-      dispatch(addNotification({
+    onSuccess: () => {
+      notifications.show({
         title: 'Thành công',
         message: 'Đã xóa giáo viên thành công!',
-        type: 'success',
-      }));
-      // Invalidate and refetch
+        color: 'green'
+      });
       queryClient.invalidateQueries({ queryKey: teacherKeys.lists() });
     },
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Lỗi khi xóa giáo viên';
-      dispatch(setError(errorMessage));
-      dispatch(addNotification({
+      notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi khi xóa giáo viên. Vui lòng thử lại sau.',
-        type: 'error',
-      }));
+        color: 'red'
+      });
     },
   });
 }; 
