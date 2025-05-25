@@ -41,8 +41,13 @@ dist/
 **/.env
 **/.env.*
 
-# Không ignore file .env.example
+# Không ignore file .env và .env.example
+!.env
 !.env.example
+!backend/.env
+!backend/.env.example
+!frontend/.env
+!frontend/.env.example
 
 # Debug
 npm-debug.log*
