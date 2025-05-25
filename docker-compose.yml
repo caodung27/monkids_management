@@ -1,47 +1,54 @@
 version: '3.8'
-services:
-  db:
-    image: postgres:15
-    container_name: monkids-db
-    restart: always
-    environment:
-      POSTGRES_DB: monkids
-      POSTGRES_USER: monkids
-      POSTGRES_PASSWORD: monkids123
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - monkids-net
 
+services:
   backend:
-    build: ./backend
-    container_name: monkids-backend
-    restart: always
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    env_file:
-      - ./backend/.env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=monkids
     depends_on:
       - db
     networks:
-      - monkids-net
+      - monkids-network
 
   frontend:
-    build: ./frontend
-    container_name: monkids-frontend
-    restart: always
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    env_file:
-      - ./frontend/.env
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
     networks:
-      - monkids-net
+      - monkids-network
 
-volumes:
-  pgdata:
+  db:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=monkids
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - monkids-network
 
 networks:
-  monkids-net:
-    driver: bridge 
+  monkids-network:
+    driver: bridge
+
+volumes:
+  postgres_data: 
