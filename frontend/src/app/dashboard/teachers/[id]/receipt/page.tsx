@@ -18,7 +18,7 @@ export default function TeacherReceipt() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
-    content: () => receiptRef.current,
+    contentRef: receiptRef,
     documentTitle: "Phiếu lương giáo viên",
     onBeforeGetContent: () => {
       // Ensure the content is ready before printing
