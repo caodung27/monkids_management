@@ -43,6 +43,10 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
+          {
+            key: 'Content-Security-Policy',
+            value: "upgrade-insecure-requests; default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data:;",
+          },
         ],
       },
     ];

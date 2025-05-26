@@ -10,6 +10,7 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Ensure we always use HTTPS
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://13.210.66.80/api';
 
 export const apiClient = {
@@ -19,6 +20,9 @@ export const apiClient = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
+      // Add credentials and mode for CORS
+      credentials: 'include',
+      mode: 'cors',
     });
     if (!response.ok) {
       throw new Error('Network response was not ok');
@@ -34,6 +38,8 @@ export const apiClient = {
         Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
       body: JSON.stringify(data),
+      credentials: 'include',
+      mode: 'cors',
     });
     if (!response.ok) {
       throw new Error('Network response was not ok');
@@ -49,6 +55,8 @@ export const apiClient = {
         Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
       body: JSON.stringify(data),
+      credentials: 'include',
+      mode: 'cors',
     });
     if (!response.ok) {
       throw new Error('Network response was not ok');
@@ -63,6 +71,8 @@ export const apiClient = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
+      credentials: 'include',
+      mode: 'cors',
     });
     if (!response.ok) {
       throw new Error('Network response was not ok');
