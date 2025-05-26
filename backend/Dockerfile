@@ -2,25 +2,26 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install dependencies required for building
+# Install dependencies
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies with legacy peer deps
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
 
-# Build the application
+# Build application
 RUN npm run build
 
 # Remove dev dependencies
 RUN npm prune --production
 
+# Expose port
 EXPOSE 8000
 
-# Start the application
-CMD ["npm", "run", "start:prod"] 
+# Start application
+CMD ["npm", "run", "start:prod"]
