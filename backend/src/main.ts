@@ -11,8 +11,7 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://172.31.14.122:3000', 'https://monkids.edu.vn'],
-    credentials: true,
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
@@ -61,7 +60,7 @@ async function bootstrap() {
   // Start the server
   const port = process.env.PORT || 8000;
   await app.listen(port);
-  logger.log(`Application is running on port ${port}`);
+  logger.log(`Application is running on: http://localhost:${port}`);
 }
 bootstrap().catch((err) => {
   console.error('Error during bootstrap:', err);
