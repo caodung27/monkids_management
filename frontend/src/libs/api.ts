@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -10,8 +11,18 @@ export const queryClient = new QueryClient({
   },
 });
 
-// Ensure we always use HTTPS
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://13.210.66.80/api';
+const baseURL = '/api';
+
+const api = axios.create({
+  baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true,
+});
+
+// Use relative path for API calls
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export const apiClient = {
   get: async <T>(endpoint: string): Promise<T> => {
@@ -20,7 +31,6 @@ export const apiClient = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
-      // Add credentials and mode for CORS
       credentials: 'include',
       mode: 'cors',
     });
