@@ -5,8 +5,8 @@ import Cookies from 'js-cookie';
 import { notifications } from '@mantine/notifications';
 import { ProfileData } from '@/types';
 
-// Use environment variables with fallback to default URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://13.210.66.80/api';
+// Use proxy path for API calls
+const API_URL = '/api';
 
 // Token service for managing JWT tokens
 export const TokenService = {
