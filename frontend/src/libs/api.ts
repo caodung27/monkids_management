@@ -21,72 +21,36 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Add request interceptor to add token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Use relative path for API calls
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export const apiClient = {
   get: async <T>(endpoint: string): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-      credentials: 'include',
-      mode: 'cors',
-    });
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-    return response.json();
+    const response = await api.get<T>(endpoint);
+    return response.data;
   },
 
   post: async <T>(endpoint: string, data: any): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify(data),
-      credentials: 'include',
-      mode: 'cors',
-    });
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-    return response.json();
+    const response = await api.post<T>(endpoint, data);
+    return response.data;
   },
 
   patch: async <T>(endpoint: string, data: any): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify(data),
-      credentials: 'include',
-      mode: 'cors',
-    });
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-    return response.json();
+    const response = await api.patch<T>(endpoint, data);
+    return response.data;
   },
 
   delete: async <T>(endpoint: string): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-      credentials: 'include',
-      mode: 'cors',
-    });
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-    return response.json();
+    const response = await api.delete<T>(endpoint);
+    return response.data;
   },
 }; 

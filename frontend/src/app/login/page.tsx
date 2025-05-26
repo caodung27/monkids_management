@@ -21,6 +21,11 @@ import { IconBrandGoogle } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi, TokenService } from '@/api/apiService';
 import { notifications } from '@mantine/notifications';
+import { apiClient } from '@/libs/api';
+
+interface LoginResponse {
+  access_token: string;
+}
 
 // Form validation schema
 const schema = z.object({
@@ -78,7 +83,11 @@ export default function LoginPage() {
       setIsSubmitting(true);
       console.log('Login: Attempting login with email:', values.email);
       
-      const response = await authApi.login(values.email, values.password);
+      const response = await apiClient.post<LoginResponse>('/auth/login', {
+        email: values.email,
+        password: values.password
+      });
+      
       console.log('Login: Login response:', response);
       
       if (response && response.access_token) {
@@ -128,11 +137,8 @@ export default function LoginPage() {
         sessionStorage.setItem('oauth_initiated', Date.now().toString());
       }
       
-      // Build the Google OAuth URL with proper parameters
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://13.210.66.80/api';
-      
-      // Use the standard OAuth path
-      const authUrl = `${backendUrl}/auth/google`;
+      // Use the proxy path for OAuth
+      const authUrl = '/api/auth/google';
       
       console.log('Login: Initiating Google OAuth login', { authUrl });
       
