@@ -11,7 +11,7 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://172.31.14.122:3000', 'https://monkids.edu.vn'],
+    origin: ['http://localhost:3000', 'http://172.31.14.122:3000', 'https://monkids.edu.vn'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
@@ -52,16 +52,16 @@ async function bootstrap() {
         description: 'Enter JWT token',
         in: 'header',
       },
-      'JWT-auth', // This name here is important for matching up with @ApiBearerAuth() in your controller!
+      'JWT-auth',
     )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
   // Start the server
-  const port = process.env.PORT || 8080;
+  const port = process.env.PORT || 8000;
   await app.listen(port);
-  logger.log(`Application is running on: http://localhost:${port}`);
+  logger.log(`Application is running on port ${port}`);
 }
 bootstrap().catch((err) => {
   console.error('Error during bootstrap:', err);
