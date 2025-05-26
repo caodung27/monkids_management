@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 
-interface DatePickerFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface DatePickerFieldProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   name: string;
   label: string;
   control: Control<any>;
@@ -18,7 +18,7 @@ interface DatePickerFieldProps extends React.InputHTMLAttributes<HTMLInputElemen
 
 const DATE_DISPLAY_FORMAT = 'dd/MM/yyyy';
 
-export const DatePickerField = forwardRef<HTMLInputElement, DatePickerFieldProps>(
+export const DatePickerField = forwardRef<HTMLButtonElement, DatePickerFieldProps>(
   ({ name, label, control, placeholder = 'Chọn ngày', className, error, ...props }, ref) => {
     const [open, setOpen] = useState(false);
 

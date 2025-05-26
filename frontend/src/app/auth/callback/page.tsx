@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Container, Text, Loader, Center } from '@mantine/core';
 import { authApi, TokenService } from '@/api/apiService';
 
-export default function OAuthCallbackPage() {
+function OAuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(true);
@@ -22,53 +22,45 @@ export default function OAuthCallbackPage() {
         const accessToken = searchParams.get('access_token');
         const refreshToken = searchParams.get('refresh_token');
         const email = searchParams.get('email');
-        const isNewUserParam = searchParams.get('is_new_user'); // Get raw string
+        const isNewUserParam = searchParams.get('is_new_user');
         const allParams = Object.fromEntries(searchParams.entries());
 
         console.log('[AUTH_CALLBACK_DEBUG] All Raw Query Params:', allParams);
         console.log(`[AUTH_CALLBACK_DEBUG] Raw 'is_new_user' param from URL: '${isNewUserParam}'`);
         
-        const isNewUser = isNewUserParam === 'true'; // Convert to boolean
+        const isNewUser = isNewUserParam === 'true';
         console.log(`[AUTH_CALLBACK_DEBUG] Parsed 'isNewUser' boolean: ${isNewUser}`);
         
-        // Original console.log for essential derived params - ensure this is correct
         console.log('OAuthCallback: Essential Derived Params', { 
           hasCode: !!code, 
           hasAccessToken: !!accessToken,
           hasRefreshToken: !!refreshToken,
           email: email, 
-          isNewUserBoolean: isNewUser // Renamed key for clarity, using the boolean
+          isNewUserBoolean: isNewUser
         });
         
         if (accessToken && refreshToken) {
-          // Store the tokens
           TokenService.setAccessToken(accessToken);
           TokenService.setRefreshToken(refreshToken);
           
-          // Store the user email
           if (email) {
             localStorage.setItem('user_email', email);
-            // Add to cookies for broader availability
             document.cookie = `email=${email};path=/;max-age=86400`;
           }
           
-          // Set the isNewUser flag in localStorage if applicable
           if (isNewUser) {
             console.log('OAuthCallback: Setting isNewUser flag to true');
             localStorage.setItem('isNewUser', 'true');
-            localStorage.setItem('rawIsNewUserValue', 'true'); // Backup flag
+            localStorage.setItem('rawIsNewUserValue', 'true');
           } else {
             localStorage.setItem('isNewUser', 'false');
             localStorage.setItem('rawIsNewUserValue', 'false');
           }
           
-          // Set auth flags
           TokenService.forceAuthSuccess();
           
-          // Wait a bit to ensure tokens are stored
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // Redirect based on whether user is new or not
           if (isNewUser) {
             console.log('OAuthCallback: Redirecting new user to profile creation via router.push');
             router.push('/profile/new');
@@ -79,8 +71,6 @@ export default function OAuthCallbackPage() {
           return;
         }
         
-        // If we don't have tokens directly, but have an auth code,
-        // exchange it for tokens via backend endpoint
         if (code) {
           console.log('OAuthCallback: Exchanging code for tokens');
           
@@ -104,17 +94,14 @@ export default function OAuthCallbackPage() {
               isNewUser: data.is_new_user
             });
             
-            // Store tokens
             TokenService.setAccessToken(data.access_token);
             TokenService.setRefreshToken(data.refresh_token);
             
-            // Store user email
             if (data.email) {
               localStorage.setItem('user_email', data.email);
               document.cookie = `email=${data.email};path=/;max-age=86400`;
             }
             
-            // Set the isNewUser flag
             if (data.is_new_user) {
               console.log('OAuthCallback: Setting isNewUser flag to true from API response');
               localStorage.setItem('isNewUser', 'true');
@@ -124,13 +111,10 @@ export default function OAuthCallbackPage() {
               localStorage.setItem('rawIsNewUserValue', 'false');
             }
             
-            // Set auth flags
             TokenService.forceAuthSuccess();
             
-            // Wait a bit to ensure tokens are stored
             await new Promise(resolve => setTimeout(resolve, 500));
             
-            // Redirect based on whether user is new or not
             if (data.is_new_user) {
               console.log('OAuthCallback: Redirecting new user to profile creation via router.push (after code exchange)');
               router.push('/profile/new');
@@ -147,7 +131,6 @@ export default function OAuthCallbackPage() {
           }
         }
         
-        // If we reach here, we don't have tokens or code
         console.error('OAuthCallback: No tokens or code found');
         setError('Không tìm thấy mã xác thực. Vui lòng thử lại.');
         router.push('/login');
@@ -174,5 +157,22 @@ export default function OAuthCallbackPage() {
         </div>
       </Center>
     </Container>
+  );
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <Container size="xs" my="xl">
+        <Center mt="xl">
+          <div style={{ textAlign: 'center' }}>
+            <Loader size="lg" />
+            <Text mt="md">Đang tải...</Text>
+          </div>
+        </Center>
+      </Container>
+    }>
+      <OAuthCallbackContent />
+    </Suspense>
   );
 } 

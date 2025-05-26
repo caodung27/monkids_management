@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Container, Paper, Title, Text, Table, Button, Grid, Group, Box } from '@mantine/core';
+import { Container, Paper, Title, Text, Table, Button, Grid, Group } from '@mantine/core';
 import { useParams } from 'next/navigation';
 import { IconPrinter, IconArrowLeft } from '@tabler/icons-react';
-import { useReactToPrint } from 'react-to-print';
 import { formatVND } from '@/utils/formatters';
-import { notifications } from '@mantine/notifications';
 import Link from 'next/link';
 import { useStudent } from '@/api/hooks/useStudents';
+import { useReactToPrint } from 'react-to-print';
 
 export default function StudentReceipt() {
   const params = useParams();
@@ -19,7 +18,7 @@ export default function StudentReceipt() {
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
-  });
+  } as any);
 
   // Use the custom hook to fetch student data
   const { data: student, isLoading, error } = useStudent(studentId);

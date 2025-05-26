@@ -19,7 +19,7 @@ export default function TeacherReceipt() {
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
-  });
+  } as any);
 
   // Use the custom hook to fetch teacher data
   const { data: teacher, isLoading, error } = useTeacher(teacherId);
