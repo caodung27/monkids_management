@@ -5,7 +5,7 @@ const nextConfig = {
     domains: ['images.clerk.dev'],
   },
   experimental: {
-    serverActions: true,
+    serverActions: false,
   },
   webpack: (config) => {
     config.module.rules.push({
