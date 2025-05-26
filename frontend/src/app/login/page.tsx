@@ -129,7 +129,7 @@ export default function LoginPage() {
       }
       
       // Build the Google OAuth URL with proper parameters
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://172.31.14.122/api';
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://172.31.14.122';
       
       // Use the standard OAuth path
       const authUrl = `${backendUrl}/auth/google`;
