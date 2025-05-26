@@ -14,6 +14,14 @@ const nextConfig = {
     });
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'https://13.210.66.80/api/:path*',
+      },
+    ];
+  },
   async headers() {
     return [
       {
