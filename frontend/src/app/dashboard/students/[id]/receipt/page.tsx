@@ -18,6 +18,13 @@ export default function StudentReceipt() {
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
+    documentTitle: "Biên lai thu tiền",
+    onBeforeGetContent: () => {
+      // Ensure the content is ready before printing
+      return new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
+    },
   } as any);
 
   // Use the custom hook to fetch student data
