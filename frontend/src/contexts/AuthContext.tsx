@@ -121,23 +121,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setIsLoading(true);
       const { access_token, user } = await authApi.login(email, password);
+      
+      if (!access_token || !user) {
+        throw new Error('Invalid response from server');
+      }
+      
       setUser(user);
       setIsLoading(false);
+      
       notifications.show({
         title: 'Đăng nhập thành công',
         message: `Chào mừng ${user.name}!`,
         color: 'green',
       });
-      router.push('/dashboard');
-    } catch (error) {
+      
+      // Use window.location.href instead of router.push
+      window.location.href = '/dashboard';
+    } catch (error: any) {
       console.error('Login error:', error);
+      setIsLoading(false);
+      
+      let errorMessage = 'Email hoặc mật khẩu không đúng';
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message === 'Network Error') {
+        errorMessage = 'Không thể kết nối đến server';
+      }
+      
       notifications.show({
         title: 'Lỗi đăng nhập',
-        message: 'Email hoặc mật khẩu không đúng',
+        message: errorMessage,
         color: 'red',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 

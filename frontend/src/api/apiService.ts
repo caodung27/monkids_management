@@ -44,7 +44,8 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: false,
+  withCredentials: true,
+  timeout: 5000, // 5 seconds timeout
 });
 
 // Add request interceptor to add auth token
@@ -57,6 +58,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -88,11 +90,24 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
         // If refresh fails, clear tokens and redirect to login
         TokenService.clearTokens();
         window.location.replace('/login');
         return Promise.reject(refreshError);
       }
+    }
+
+    // Handle network errors
+    if (error.code === 'ERR_NETWORK') {
+      console.error('Network error:', error);
+      throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng của bạn.');
+    }
+
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED') {
+      console.error('Request timeout:', error);
+      throw new Error('Yêu cầu đã hết thời gian chờ. Vui lòng thử lại.');
     }
 
     return Promise.reject(error);
@@ -155,26 +170,31 @@ export const checkTokenAndRefreshIfNeeded = async (): Promise<boolean> => {
 // Authentication API
 export const authApi = {
   login: async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
-    const { access_token, user } = response.data;
-    TokenService.setAccessToken(access_token);
-    return { access_token, user };
+    try {
+      const response = await apiClient.post('/auth/login', { email, password });
+      const { access_token, user } = response.data;
+      
+      if (!access_token || !user) {
+        throw new Error('Invalid response from server');
+      }
+      
+      TokenService.setAccessToken(access_token);
+      return { access_token, user };
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   },
 
   logout: async () => {
     try {
       const refreshToken = TokenService.getRefreshToken();
-      // Call logout API with refresh token
       await apiClient.post('/auth/logout', { refresh_token: refreshToken });
-      // Clear tokens after successful API call
       TokenService.clearTokens();
-      // Force redirect to login page
-      window.location.href = '/login';
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if API call fails, still clear tokens and redirect
+      // Even if API call fails, still clear tokens
       TokenService.clearTokens();
-      window.location.href = '/login';
     }
   },
 
@@ -244,6 +264,11 @@ export const authApi = {
     try {
       const response = await apiClient.post('/auth/token/refresh', { refresh_token: refreshToken });
       const { access_token, user } = response.data;
+      
+      if (!access_token) {
+        throw new Error('Invalid refresh token response');
+      }
+      
       TokenService.setAccessToken(access_token);
       return { access_token, user };
     } catch (error) {
