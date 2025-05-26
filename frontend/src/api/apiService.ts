@@ -46,6 +46,9 @@ const apiClient: AxiosInstance = axios.create({
   },
   withCredentials: true,
   timeout: 5000, // 5 seconds timeout
+  validateStatus: (status) => {
+    return status >= 200 && status < 500; // Accept all responses except 5xx errors
+  },
 });
 
 // Add request interceptor to add auth token
@@ -108,6 +111,12 @@ apiClient.interceptors.response.use(
     if (error.code === 'ECONNABORTED') {
       console.error('Request timeout:', error);
       throw new Error('Yêu cầu đã hết thời gian chờ. Vui lòng thử lại.');
+    }
+
+    // Handle SSL errors
+    if (error.message?.includes('certificate') || error.message?.includes('SSL')) {
+      console.error('SSL error:', error);
+      throw new Error('Lỗi bảo mật kết nối. Vui lòng thử lại sau.');
     }
 
     return Promise.reject(error);
@@ -180,9 +189,12 @@ export const authApi = {
       
       TokenService.setAccessToken(access_token);
       return { access_token, user };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      throw error;
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      throw new Error('Đã xảy ra lỗi khi đăng nhập. Vui lòng thử lại sau.');
     }
   },
 
