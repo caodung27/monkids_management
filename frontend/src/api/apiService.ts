@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { ProfileData } from '@/types';
 
 // Use environment variables with fallback to default URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://172.31.14.122/api';
 
 // Token service for managing JWT tokens
 export const TokenService = {
