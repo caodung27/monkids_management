@@ -44,7 +44,7 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true,
+  withCredentials: false,
 });
 
 // Add request interceptor to add auth token
@@ -155,7 +155,7 @@ export const checkTokenAndRefreshIfNeeded = async (): Promise<boolean> => {
 // Authentication API
 export const authApi = {
   login: async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
+    const response = await apiClient.post('/api/auth/login', { email, password });
     const { access_token, user } = response.data;
     TokenService.setAccessToken(access_token);
     return { access_token, user };
