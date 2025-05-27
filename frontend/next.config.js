@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['images.clerk.dev'],
+    domains: ['monkids.site'],
   },
   experimental: {
     serverActions: false,
@@ -13,14 +13,6 @@ const nextConfig = {
       use: ['@svgr/webpack'],
     });
     return config;
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'https://13.210.66.80/api/:path*',
-      },
-    ];
   },
   async headers() {
     return [
@@ -75,6 +67,9 @@ const nextConfig = {
         permanent: true,
       },
     ];
+  },
+  env: {
+    NEXT_PUBLIC_API_URL: 'https://api.monkids.site/api',
   },
 };
 

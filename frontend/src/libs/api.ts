@@ -11,7 +11,7 @@ export const queryClient = new QueryClient({
   },
 });
 
-const baseURL = '/api';
+const baseURL = process.env.NEXT_PUBLIC_API_URL;
 
 const api = axios.create({
   baseURL,
@@ -30,8 +30,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Use relative path for API calls
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export const apiClient = {
   get: async <T>(endpoint: string): Promise<T> => {

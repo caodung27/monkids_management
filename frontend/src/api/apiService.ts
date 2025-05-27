@@ -5,8 +5,8 @@ import Cookies from 'js-cookie';
 import { notifications } from '@mantine/notifications';
 import { ProfileData } from '@/types';
 
-// Use proxy path for API calls
-const API_URL = '/api';
+// Use environment variable for API calls
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // Token service for managing JWT tokens
 export const TokenService = {
