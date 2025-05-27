@@ -4,9 +4,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } f
 import Cookies from 'js-cookie';
 import { notifications } from '@mantine/notifications';
 import { ProfileData } from '@/types';
-
-// Use environment variable for API calls
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { QueryClient } from '@tanstack/react-query';
 
 // Token service for managing JWT tokens
 export const TokenService = {
@@ -40,7 +38,7 @@ export const TokenService = {
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
-  baseURL: API_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -232,7 +230,7 @@ export const authApi = {
   },
 
   googleLogin: async () => {
-    window.location.href = `${API_URL}/auth/google`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
   },
 
   googleCallback: async (code: string) => {
@@ -426,7 +424,7 @@ export const statsApi = {
 // Attendance API
 export const attendanceApi = {
   getTeacherAttendance: async (teacherId: string, year: number, month: number) => {
-    const response = await apiClient.get(`${API_URL}/attendance/${teacherId}/${year}/${month}`);
+    const response = await apiClient.get(`${process.env.NEXT_PUBLIC_API_URL}/attendance/${teacherId}/${year}/${month}`);
     return response.data;
   },
 
@@ -447,7 +445,7 @@ export const attendanceApi = {
     absent_days?: number[];
     extra_days?: number[];
   }) => {
-    const response = await apiClient.post(`${API_URL}/attendance`, {
+    const response = await apiClient.post(`${process.env.NEXT_PUBLIC_API_URL}/attendance`, {
       teacherId,
       year,
       month,
@@ -473,4 +471,14 @@ export const exportApi = {
       throw error;
     }
   }
-}; 
+};
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+}); 

@@ -21,7 +21,6 @@ import { IconBrandGoogle } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi, TokenService } from '@/api/apiService';
 import { notifications } from '@mantine/notifications';
-import { apiClient } from '@/libs/api';
 
 interface LoginResponse {
   access_token: string;
@@ -83,10 +82,7 @@ export default function LoginPage() {
       setIsSubmitting(true);
       console.log('Login: Attempting login with email:', values.email);
       
-      const response = await apiClient.post<LoginResponse>('/auth/login', {
-        email: values.email,
-        password: values.password
-      });
+      const response = await authApi.login(values.email, values.password);
       
       console.log('Login: Login response:', response);
       

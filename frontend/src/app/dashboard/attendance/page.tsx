@@ -26,25 +26,12 @@ const getStatusColors = (colorScheme: 'light' | 'dark') => ({
 });
 
 // Status icons
-const getStatusIcons = (colorScheme: 'light' | 'dark', theme: MantineTheme): Record<AttendanceStatus, JSX.Element | null> => ({
-  [AttendanceStatus.FULL_DAY]: <IconCheck size={16} stroke={1.5} color={colorScheme === 'dark' ? theme.colors.dark[9] : undefined} />,
-  [AttendanceStatus.HALF_DAY]: <IconClock size={16} stroke={1.5} color={colorScheme === 'dark' ? theme.colors.dark[9] : undefined} />,
-  [AttendanceStatus.ABSENT]: <IconX size={16} stroke={1.5} color={colorScheme === 'dark' ? theme.colors.dark[9] : undefined} />,
+const getStatusIcons = (colorScheme: 'light' | 'dark'): Record<AttendanceStatus, JSX.Element | null> => ({
+  [AttendanceStatus.FULL_DAY]: <IconCheck size={16} stroke={1.5} color={colorScheme === 'dark' ? '#000' : '#fff'} />,
+  [AttendanceStatus.HALF_DAY]: <IconClock size={16} stroke={1.5} color={colorScheme === 'dark' ? '#000' : '#fff'} />,
+  [AttendanceStatus.ABSENT]: <IconX size={16} stroke={1.5} color={colorScheme === 'dark' ? '#000' : '#fff'} />,
   [AttendanceStatus.NOT_SET]: null,
-  [AttendanceStatus.SUNDAY]: <Box 
-    style={{ 
-      width: 16, 
-      height: 16, 
-      background: `repeating-linear-gradient(
-        -45deg,
-        ${colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.gray[3]},
-        ${colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.gray[3]} 5px,
-        ${colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[2]} 5px,
-        ${colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[2]} 10px
-      )`,
-      opacity: 0.6
-    }} 
-  />
+  [AttendanceStatus.SUNDAY]: null,
 });
 
 export default function TeacherAttendancePage() {
@@ -453,7 +440,12 @@ export default function TeacherAttendancePage() {
   // Cell border color based on theme
   const cellBorderColor = colorScheme === 'dark' ? theme.colors.dark[4] : theme.colors.gray[3];
   
-  const statusIcons = getStatusIcons(colorScheme === 'dark' ? 'dark' : 'light', theme);
+  const statusIcons = getStatusIcons(colorScheme === 'dark' ? 'dark' : 'light');
+  
+  // Fallback: nếu không có màu, trả về màu mặc định
+  const getCellBackground = (dayStatus: AttendanceStatus, colorScheme: string) => {
+    return statusColors[dayStatus] || (colorScheme === 'dark' ? '#222' : '#fff');
+  };
   
   return (
     <Container fluid>
@@ -529,26 +521,31 @@ export default function TeacherAttendancePage() {
                     {daysInMonth.map((day) => {
                       const dateStr = day.toISOString().split('T')[0];
                       const dayStatus = getDayStatus(teacher.id, day.getDate());
-                      const dayOfWeek = day.getDay(); // 0 = Sunday, 1-5 = Mon-Fri, 6 = Saturday
-                      
+                      const dayOfWeek = day.getDay();
+
                       // Determine background color or pattern based on status
-                      let cellBackground = statusColors[dayStatus];
+                      let cellBackground = undefined;
+                      let cellBackgroundColor = undefined;
                       if (dayStatus === AttendanceStatus.SUNDAY) {
-                         cellBackground = `repeating-linear-gradient(
-                            -45deg,
-                            ${colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.gray[3]},
-                            ${colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.gray[3]} 5px,
-                            ${colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[2]} 5px,
-                            ${colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[2]} 10px
-                          )`;
+                        cellBackground = `repeating-linear-gradient(
+                          -45deg,
+                          ${colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.gray[3]},
+                          ${colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.gray[3]} 5px,
+                          ${colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[2]} 5px,
+                          ${colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[2]} 10px
+                        )`;
+                      } else if (dayStatus !== AttendanceStatus.NOT_SET) {
+                        cellBackgroundColor = getCellBackground(dayStatus, colorScheme);
+                      } else {
+                        cellBackgroundColor = 'transparent';
                       }
-                      
+
                       return (
-                        <Table.Td 
-                          key={dateStr} 
-                          style={{ 
-                            backgroundColor: dayStatus !== AttendanceStatus.NOT_SET && dayStatus !== AttendanceStatus.SUNDAY ? statusColors[dayStatus] : undefined,
-                            background: dayStatus === AttendanceStatus.SUNDAY ? cellBackground : undefined,
+                        <Table.Td
+                          key={dateStr}
+                          style={{
+                            background: cellBackground,
+                            backgroundColor: cellBackgroundColor,
                             cursor: dayOfWeek === 0 ? 'not-allowed' : 'pointer',
                             textAlign: 'center',
                             border: dayStatus === AttendanceStatus.NOT_SET ? `1px solid ${cellBorderColor}` : 'none',
@@ -558,16 +555,11 @@ export default function TeacherAttendancePage() {
                           }}
                           onClick={() => dayOfWeek !== 0 && handleAttendanceChange(teacher.id, day.getDate())}
                         >
-                          <Flex 
-                            align="center" 
-                            justify="center" 
-                            h="100%" 
-                          >
+                          <Flex align="center" justify="center" h="100%">
                             {/* Render icon only for statuses other than NOT_SET and SUNDAY */}
-                            {dayStatus !== AttendanceStatus.NOT_SET && dayStatus !== AttendanceStatus.SUNDAY 
-                                ? statusIcons[dayStatus]
-                                : null
-                            }
+                            {dayStatus !== AttendanceStatus.NOT_SET && dayStatus !== AttendanceStatus.SUNDAY
+                              ? statusIcons[dayStatus]
+                              : null}
                           </Flex>
                         </Table.Td>
                       );

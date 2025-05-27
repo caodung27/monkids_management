@@ -67,10 +67,7 @@ const nextConfig = {
         permanent: true,
       },
     ];
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: 'https://api.monkids.site/api',
-  },
+  }
 };
 
 module.exports = nextConfig; 

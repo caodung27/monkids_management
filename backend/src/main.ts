@@ -12,9 +12,10 @@ async function bootstrap() {
   // Enable CORS chỉ khi không phải production
   if (process.env.NODE_ENV !== 'production') {
     app.enableCors({
-      origin: '*',
+      origin: 'http://localhost:3000',
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      credentials: true,
     });
   }
 
