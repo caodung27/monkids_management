@@ -19,33 +19,19 @@ import {
 import { IconSearch, IconEdit, IconTrash, IconDotsVertical } from '@tabler/icons-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { notifications } from '@mantine/notifications';
-
-interface Account {
-  id: string;
-  name: string;
-  email: string;
-  account_type: string;
-  role: 'ADMIN' | 'USER' | 'TEACHER';
-  is_active: boolean;
-}
+import { profileApi } from '@/api/apiService';
+import { ProfileData } from '@/types';
 
 export default function AccountsPage() {
   const { canEdit, canDelete } = usePermissions();
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<ProfileData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<ProfileData | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const handleUpdateAccount = async (id: string, updates: Partial<Account>) => {
+  const handleUpdateAccount = async (id: string, updates: Partial<ProfileData>) => {
     try {
-      const response = await fetch(`/api/accounts/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
-
+      const response = await profileApi.updateUser(id, updates);
       if (response.ok) {
         notifications.show({
           title: 'Thành công',
@@ -69,9 +55,7 @@ export default function AccountsPage() {
     if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
 
     try {
-      const response = await fetch(`/api/accounts/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await profileApi.deleteUser(id);
 
       if (response.ok) {
         notifications.show({
@@ -93,9 +77,8 @@ export default function AccountsPage() {
 
   const fetchAccounts = async () => {
     try {
-      const response = await fetch('/api/accounts');
-      const data = await response.json();
-      setAccounts(data);
+      const response = await profileApi.getAllUsers();
+      setAccounts(response);
     } catch (error) {
       notifications.show({
         title: 'Lỗi',
@@ -272,4 +255,4 @@ export default function AccountsPage() {
       </Modal>
     </Container>
   );
-} 
+}

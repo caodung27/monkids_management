@@ -331,19 +331,23 @@ export const authApi = {
 
 // Profile API
 export const profileApi = {
-  getCurrentUser: async () => {
-    try {
-      const response = await apiClient.get('/auth/profile');
-      return response.data;
-    } catch (error) {
-      console.error('getCurrentUser: Error:', error);
-      return null;
-    }
+  getAllUsers: async () => {
+   try {
+    const response = await apiClient.get('/users');
+    return response.data;
+   } catch (error) {
+    handleApiError(error);
+    throw error;
+   }
   },
   updateUser: async (id: string, formData: ProfileData) => {
     const response = await apiClient.patch(`/users/${id}`, formData);
     return response.data;
-  }
+  },
+  deleteUser: async (id: string) => {
+    const response = await apiClient.delete(`/users/${id}`);
+    return response.data;
+  },
 };
 
 // Teacher API
@@ -522,4 +526,4 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
-}); 
+});
