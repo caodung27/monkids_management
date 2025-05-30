@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   AppShell,
   Avatar, 
@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDisclosure, useToggle } from '@mantine/hooks';
 import { authApi } from '@/api/apiService';
+import { usePathname } from 'next/navigation';
 
 interface HeaderProps {
   opened: boolean;
@@ -33,11 +34,21 @@ interface HeaderProps {
 }
 
 export default function Header({ opened, toggle }: HeaderProps) {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, updateUserInfo } = useAuth();
   const theme = useMantineTheme();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const [themeValue, toggleTheme] = useToggle(['light', 'dark']);
   const profileId = user?.id;
+  const pathname = usePathname();
+  const prevPathRef = useRef<string>('');
+
+  // Update user info only when returning from profile page to dashboard
+  useEffect(() => {
+    if (pathname === '/dashboard' && prevPathRef.current.startsWith('/profile/') && isAuthenticated) {
+      updateUserInfo();
+    }
+    prevPathRef.current = pathname;
+  }, [pathname, isAuthenticated, updateUserInfo]);
 
   const handleLogout = async () => {
     try {

@@ -30,6 +30,7 @@ import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { Response } from 'express';
 import * as fs from 'fs';
 import * as archiver from 'archiver';
+import { UserRole } from 'src/modules/users/entities/user.entity';
 
 @ApiTags('students')
 @ApiBearerAuth()
@@ -39,7 +40,7 @@ export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
 
   @Post()
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create student' })
   @ApiResponse({ status: 201, description: 'Student created' })
   create(@Body() createStudentDto: CreateStudentDto) {
@@ -47,7 +48,7 @@ export class StudentsController {
   }
 
   @Get()
-  @Roles('ADMIN', 'USER')
+  @Roles(UserRole.ADMIN, UserRole.USER)
   @ApiOperation({ summary: 'Get all students (paginated)' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -56,14 +57,14 @@ export class StudentsController {
   }
 
   @Get(':sequential_number')
-  @Roles('ADMIN', 'USER')
+  @Roles(UserRole.ADMIN, UserRole.USER)
   @ApiOperation({ summary: 'Get student by sequential_number' })
   findOne(@Param('sequential_number') sequential_number: string) {
     return this.studentsService.findOne(sequential_number);
   }
 
   @Patch(':sequential_number')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update student' })
   update(
     @Param('sequential_number') sequential_number: string,
@@ -73,14 +74,14 @@ export class StudentsController {
   }
 
   @Delete(':sequential_number')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete student' })
   remove(@Param('sequential_number') sequential_number: string) {
     return this.studentsService.remove(sequential_number);
   }
 
   @Post('bulk-delete')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete multiple students' })
   @ApiResponse({ status: 200, description: 'Students deleted successfully' })
   @ApiResponse({
@@ -92,7 +93,7 @@ export class StudentsController {
   }
 
   @Post('export')
-  @Roles('ADMIN', 'USER')
+  @Roles(UserRole.ADMIN, UserRole.USER)
   @ApiOperation({ summary: 'Export selected student receipts' })
   @ApiResponse({ status: 200, description: 'Zip file of receipts generated successfully', type: 'application/zip' })
   @ApiResponse({ status: 404, description: 'No students found with the provided IDs' })

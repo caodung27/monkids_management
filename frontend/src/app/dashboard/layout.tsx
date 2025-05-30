@@ -116,8 +116,6 @@ export default function DashboardLayout({
   useEffect(() => {
     // Skip if already checked or on public paths
     if (hasCheckedStorage || 
-        pathname?.startsWith('/login') || 
-        pathname?.startsWith('/register') ||
         pathname?.startsWith('/auth/')) {
       setLoading(false);
       return;

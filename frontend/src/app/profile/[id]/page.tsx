@@ -54,7 +54,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const params = useParams();
   const profileId = params.id as string;
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, updateUserInfo } = useAuth();
   const { uploadMedia } = useCloudinary();
   const [profileData, setProfileData] = useState<ProfileData>({
     id: profileId,
@@ -321,6 +321,9 @@ export default function ProfilePage() {
         message: 'Hồ sơ đã được cập nhật thành công',
         color: 'green'
       });
+
+      // Update user info in context before redirecting
+      await updateUserInfo();
 
       // navigate to dashboard
       router.push('/dashboard');

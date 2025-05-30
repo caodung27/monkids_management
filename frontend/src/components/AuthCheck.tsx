@@ -11,8 +11,8 @@ interface AuthCheckProps {
 
 // Expanded list of public paths that don't require authentication
 const publicPaths = [
-  '/login', 
-  '/register',
+  '/auth/login', 
+  '/auth/register',
   '/auth/callback', 
   '/auth/oauth-callback', 
   '/auth/error'
@@ -29,6 +29,7 @@ export default function AuthCheck({ children }: AuthCheckProps) {
   
   useEffect(() => {
     const verifyAuth = async () => {
+      // For public paths, immediately set authorized and stop checking
       if (isPublicPath) {
         setIsAuthorized(true);
         setIsChecking(false);
@@ -43,10 +44,7 @@ export default function AuthCheck({ children }: AuthCheckProps) {
           console.log('AuthCheck: No tokens found');
           setIsAuthorized(false);
           setIsChecking(false);
-          // Only redirect if not already on login page
-          if (!pathname?.startsWith('/login')) {
-            router.push('/login');
-          }
+          router.push('/auth/login');
           return;
         }
         
@@ -60,48 +58,63 @@ export default function AuthCheck({ children }: AuthCheckProps) {
         if (!isValid) {
           console.log('AuthCheck: Token invalid');
           TokenService.clearTokens();
-          // Only redirect if not already on login page
-          if (!pathname?.startsWith('/login')) {
-            router.push('/login');
-          }
+          router.push('/auth/login');
         }
       } catch (error) {
         console.error('AuthCheck: Error checking authorization', error);
         setIsAuthorized(false);
         setIsChecking(false);
+        router.push('/auth/login');
       }
     };
     
     verifyAuth();
   }, [pathname, isPublicPath, router]);
   
-  // Show loading while checking authorization
+  // Show loading while checking authorization (only for non-public paths)
   if (isChecking && !isPublicPath) {
     return (
-      <Center style={{ height: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Loader size="xl" />
-        </div>
-      </Center>
+      <div style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'white'
+      }}>
+        <Loader size="xl" />
+      </div>
     );
   }
   
   // If not authorized and not on a public path
   if (isAuthorized === false && !isPublicPath) {
     return (
-      <Center style={{ height: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Text size="xl" mb="md">Authentication Failed</Text>
-          <Text mb="xl">Your session appears to be invalid or expired.</Text>
-          <Button onClick={() => {
-            TokenService.clearTokens();
-            router.push('/login');
-          }}>Go to Login</Button>
-        </div>
-      </Center>
+      <div style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'white'
+      }}>
+        <Text size="xl" mb="md">Authentication Failed</Text>
+        <Text mb="xl">Your session appears to be invalid or expired.</Text>
+        <Button onClick={() => {
+          TokenService.clearTokens();
+          router.push('/auth/login');
+        }}>Go to Login</Button>
+      </div>
     );
   }
   
-  // Either show children if authorized or nothing while redirecting
+  // Either show children if authorized or on public path
   return <>{children}</>;
 } 

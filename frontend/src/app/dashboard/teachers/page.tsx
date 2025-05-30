@@ -9,6 +9,7 @@ import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
 import { teacherApi, exportApi } from '@/api/apiService';
 import { useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Simple formatter for Vietnamese currency
 const formatVND = (value: string | number) => {
@@ -47,6 +48,7 @@ export default function TeachersPage() {
   } = useTeachers();
 
   const deleteTeacherMutation = useDeleteTeacher(queryClient);
+  const { canEdit, canDelete, canPrint } = usePermissions();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
@@ -179,29 +181,33 @@ export default function TeachersPage() {
       <Group justify="space-between" mb="md">
         <Title order={2}>Danh sách giáo viên</Title>
         <Group gap="sm">
-          <Button 
-            color="red" 
-            leftSection={<IconTrash size={16} />}
-            disabled={selectedRows.length === 0}
-            onClick={handleDeleteSelected}
-          >
-            Xóa ({selectedRows.length})
-          </Button>
-          <Link href="/dashboard/teachers/new" style={{ textDecoration: 'none' }}>
-            <Button leftSection={<IconPlus size={16} />}>
-              Thêm giáo viên
+          {canDelete() && (
+            <Button 
+              color="red" 
+              leftSection={<IconTrash size={16} />}
+              disabled={selectedRows.length === 0}
+              onClick={handleDeleteSelected}
+            >
+              Xóa ({selectedRows.length})
             </Button>
-          </Link>
-          <Group>
+          )}
+          {canEdit() && (
+            <Link href="/dashboard/teachers/new" style={{ textDecoration: 'none' }}>
+              <Button leftSection={<IconPlus size={16} />}>
+                Thêm giáo viên
+              </Button>
+            </Link>
+          )}
+          {canPrint() && (
             <Button
               leftSection={<IconFileExport size={16} />}
               onClick={handleBulkExport}
               loading={exporting}
-              disabled={Object.values(selectedTeachers).filter(Boolean).length === 0}
+              disabled={selectedRows.length === 0}
             >
-              Xuất phiếu lương
+              Xuất bảng lương
             </Button>
-          </Group>
+          )}
         </Group>
       </Group>
 
@@ -352,23 +358,29 @@ export default function TeachersPage() {
                           </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
-                          <Link href={`/dashboard/teachers/${teacher.id}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Menu.Item leftSection={<IconEdit size={14} />}>
-                              Chỉnh sửa
+                          {canEdit() && (
+                            <Link href={`/dashboard/teachers/${teacher.id}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                              <Menu.Item leftSection={<IconEdit size={14} />}>
+                                Chỉnh sửa
+                              </Menu.Item>
+                            </Link>
+                          )}
+                          {canPrint() && (
+                            <Link href={`/dashboard/teachers/${teacher.id}/payroll`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                              <Menu.Item leftSection={<IconPrinter size={14} />}>
+                                In bảng lương
+                              </Menu.Item>
+                            </Link>
+                          )}
+                          {canDelete() && (
+                            <Menu.Item 
+                              leftSection={<IconTrash size={14} />}
+                              color="red"
+                              onClick={() => handleDeleteTeacher(teacher.id)}
+                            >
+                              Xóa
                             </Menu.Item>
-                          </Link>
-                          <Link href={`/dashboard/teachers/${teacher.id}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Menu.Item leftSection={<IconPrinter size={14} />}>
-                              In phiếu lương
-                            </Menu.Item>
-                          </Link>
-                          <Menu.Item 
-                            leftSection={<IconTrash size={14} />}
-                            color="red"
-                            onClick={() => handleDeleteTeacher(teacher.id)}
-                          >
-                            Xóa
-                          </Menu.Item>
+                          )}
                         </Menu.Dropdown>
                       </Menu>
                     </Table.Td>

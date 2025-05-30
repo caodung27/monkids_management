@@ -27,7 +27,7 @@ import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { Response } from 'express';
 import * as fs from 'fs';
 import { NotFoundException } from '@nestjs/common';
-
+import { UserRole } from 'src/modules/users/entities/user.entity';
 @ApiTags('teachers')
 @ApiBearerAuth()
 @Controller('teachers')
@@ -36,7 +36,7 @@ export class TeachersController {
   constructor(private readonly teachersService: TeachersService) {}
 
   @Get()
-  @Roles('ADMIN', 'USER')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'Get all teachers' })
   @ApiResponse({ status: 200, description: 'Return all teachers' })
   findAll(@Query() paginationDto: PaginationDto) {
@@ -44,7 +44,7 @@ export class TeachersController {
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'USER')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'Get a teacher by id' })
   @ApiResponse({ status: 200, description: 'Return the teacher' })
   findOne(@Param('id') id: string) {
@@ -52,7 +52,7 @@ export class TeachersController {
   }
 
   @Post()
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new teacher' })
   @ApiResponse({ status: 201, description: 'Teacher created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
@@ -61,7 +61,7 @@ export class TeachersController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update a teacher' })
   @ApiResponse({ status: 200, description: 'Teacher updated successfully' })
   @ApiResponse({ status: 404, description: 'Teacher not found' })
@@ -70,7 +70,7 @@ export class TeachersController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete a teacher' })
   @ApiResponse({ status: 200, description: 'Teacher deleted successfully' })
   @ApiResponse({ status: 404, description: 'Teacher not found' })
@@ -79,7 +79,7 @@ export class TeachersController {
   }
 
   @Post('bulk-delete')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete multiple teachers' })
   @ApiResponse({ status: 200, description: 'Teachers deleted successfully' })
   @ApiResponse({
@@ -91,7 +91,7 @@ export class TeachersController {
   }
 
   @Post('export')
-  @Roles('ADMIN', 'USER')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'Export selected teacher salary slips' })
   @ApiResponse({ status: 200, description: 'Zip file of salary slips generated successfully', type: 'application/zip' })
   @ApiResponse({ status: 404, description: 'No teachers found with the provided IDs' })

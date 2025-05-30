@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { studentApi, exportApi } from '@/api/apiService';
 import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Simple formatter for Vietnamese currency
 const formatVND = (value: string | number) => {
@@ -14,6 +15,7 @@ const formatVND = (value: string | number) => {
 };
 
 export default function StudentsPage() {
+  const { canEdit, canDelete, canPrint } = usePermissions();
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -178,27 +180,33 @@ export default function StudentsPage() {
       <Group justify="space-between" mb="md">
         <Title order={2}>Danh sách học sinh</Title>
         <Group gap="sm">
-          <Button 
-            color="red" 
-            leftSection={<IconTrash size={16} />}
-            disabled={selectedRows.length === 0}
-            onClick={handleDeleteSelected}
-          >
-            Xóa ({selectedRows.length})
-          </Button>
-          <Link href="/dashboard/students/new" style={{ textDecoration: 'none' }}>
-            <Button leftSection={<IconPlus size={16} />}>
-              Thêm học sinh
+          {canDelete() && (
+            <Button 
+              color="red" 
+              leftSection={<IconTrash size={16} />}
+              disabled={selectedRows.length === 0}
+              onClick={handleDeleteSelected}
+            >
+              Xóa ({selectedRows.length})
             </Button>
-          </Link>
-          <Button
-            leftSection={<IconFileExport size={16} />}
-            onClick={handleBulkExport}
-            loading={exporting}
-            disabled={selectedRows.length === 0}
-          >
-            Xuất biên lai
-          </Button>
+          )}
+          {canEdit() && (
+            <Link href="/dashboard/students/new" style={{ textDecoration: 'none' }}>
+              <Button leftSection={<IconPlus size={16} />}>
+                Thêm học sinh
+              </Button>
+            </Link>
+          )}
+          {canPrint() && (
+            <Button
+              leftSection={<IconFileExport size={16} />}
+              onClick={handleBulkExport}
+              loading={exporting}
+              disabled={selectedRows.length === 0}
+            >
+              Xuất biên lai
+            </Button>
+          )}
         </Group>
       </Group>
 
@@ -346,23 +354,29 @@ export default function StudentsPage() {
                           </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
-                          <Link href={`/dashboard/students/${student.sequential_number}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Menu.Item leftSection={<IconEdit size={14} />}>
-                              Chỉnh sửa
+                          {canEdit() && (
+                            <Link href={`/dashboard/students/${student.sequential_number}/edit`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                              <Menu.Item leftSection={<IconEdit size={14} />}>
+                                Chỉnh sửa
+                              </Menu.Item>
+                            </Link>
+                          )}
+                          {canPrint() && (
+                            <Link href={`/dashboard/students/${student.sequential_number}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                              <Menu.Item leftSection={<IconPrinter size={14} />}>
+                                In biên lai
+                              </Menu.Item>
+                            </Link>
+                          )}
+                          {canDelete() && (
+                            <Menu.Item 
+                              leftSection={<IconTrash size={14} />}
+                              color="red"
+                              onClick={() => handleDeleteStudent(student.sequential_number)}
+                            >
+                              Xóa
                             </Menu.Item>
-                          </Link>
-                          <Link href={`/dashboard/students/${student.sequential_number}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Menu.Item leftSection={<IconPrinter size={14} />}>
-                              In biên lai
-                            </Menu.Item>
-                          </Link>
-                          <Menu.Item 
-                            leftSection={<IconTrash size={14} />}
-                            color="red"
-                            onClick={() => handleDeleteStudent(student.sequential_number)}
-                          >
-                            Xóa
-                          </Menu.Item>
+                          )}
                         </Menu.Dropdown>
                       </Menu>
                     </Table.Td>

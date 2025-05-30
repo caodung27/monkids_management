@@ -38,7 +38,9 @@ export const TokenService = {
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  // baseURL: process.env.NEXT_PUBLIC_API_URL,
+  // only for development
+  baseURL: process.env.NODE_ENV === 'development' ? '/api' : process.env.NEXT_PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -176,35 +178,72 @@ export const checkTokenAndRefreshIfNeeded = async (): Promise<boolean> => {
 
 // Authentication API
 export const authApi = {
-  login: async (email: string, password: string) => {
+  getCurrentUser: async () => {
     try {
-      const response = await apiClient.post('/auth/login', { email, password });
+      const response = await apiClient.get('/auth/profile');
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  login: async (credentials: { email: string; password: string }) => {
+    try {
+      // Ensure credentials are properly formatted
+      const formData = {
+        email: credentials.email,
+        password: credentials.password
+      };
+
+      const response = await apiClient.post('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
       const { access_token, user } = response.data;
       
-      if (!access_token || !user) {
-        throw new Error('Invalid response from server');
+      if (access_token) {
+        TokenService.setAccessToken(access_token);
+        // Set user role in cookies
+        document.cookie = `user_role=${user.role};path=/;max-age=86400`;
+        
+        // Handle role-based redirection
+        let redirectTo = '/dashboard';
+        switch (user.role) {
+          case 'USER':
+            redirectTo = '/dashboard/students';
+            break;
+          case 'TEACHER':
+            redirectTo = '/dashboard/teachers';
+            break;
+          case 'ADMIN':
+            redirectTo = '/dashboard';
+            break;
+          default:
+            redirectTo = '/dashboard';
+        }
+        
+        return { access_token, user, redirectTo };
       }
-      
-      TokenService.setAccessToken(access_token);
+
       return { access_token, user };
-    } catch (error: any) {
-      console.error('Login error:', error);
-      if (error.message) {
-        throw new Error(error.message);
-      }
-      throw new Error('Đã xảy ra lỗi khi đăng nhập. Vui lòng thử lại sau.');
+    } catch (error) {
+      handleApiError(error);
+      throw error;
     }
   },
 
   logout: async () => {
     try {
-      const refreshToken = TokenService.getRefreshToken();
-      await apiClient.post('/auth/logout', { refresh_token: refreshToken });
+      const response = await apiClient.post('/auth/logout');
       TokenService.clearTokens();
+      return response.data;
     } catch (error) {
-      console.error('Logout error:', error);
-      // Even if API call fails, still clear tokens
-      TokenService.clearTokens();
+      TokenService.clearTokens(); // Clear tokens even if API call fails
+      handleApiError(error);
+      throw error;
     }
   },
 
@@ -230,7 +269,9 @@ export const authApi = {
   },
 
   googleLogin: async () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
+    // window.location.href = `${process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI}`;
+    // only for development
+    window.location.href = '/auth/google/callback';
   },
 
   googleCallback: async (code: string) => {

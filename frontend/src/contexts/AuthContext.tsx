@@ -33,6 +33,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   register: (userData: any) => Promise<void>;
   checkAndRefreshAuth: () => Promise<boolean>;
+  updateUserInfo: () => Promise<void>;
 }
 
 // Create context with default values
@@ -44,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   register: async () => {},
   checkAndRefreshAuth: async () => false,
+  updateUserInfo: async () => {},
 });
 
 // Custom hook to use the auth context
@@ -51,7 +53,7 @@ export const useAuth = () => useContext(AuthContext);
 
 // Auth provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
   const initComplete = useRef(false);
@@ -77,12 +79,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
       
-      // Try to refresh token with backend if needed
-      if (refreshToken && (!user || !accessToken)) {
+      // Only refresh token if access token is missing or expired
+      if (!accessToken && refreshToken) {
         try {
           await authApi.refreshToken(refreshToken);
-          const userData = await profileApi.getCurrentUser();
-          setUser(userData);
+          // After refreshing token, get user data only if we don't have it
+          if (!user) {
+            const userData = await profileApi.getCurrentUser();
+            setUser(userData);
+          }
           setIsLoading(false);
           return true;
         } catch (refreshError) {
@@ -92,23 +97,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // If we have a user, we're authenticated
-      if (user) {
+      // If we have both tokens and user data, we're good
+      if (accessToken && user) {
         setIsLoading(false);
         return true;
       }
 
-      // Try to get user data
-      try {
-        const userData = await profileApi.getCurrentUser();
-        setUser(userData);
-        setIsLoading(false);
-        return true;
-      } catch (error) {
-        console.error('AuthProvider: Failed to get user data', error);
-        setIsLoading(false);
-        return false;
+      // If we have access token but no user data, get it
+      if (accessToken && !user) {
+        try {
+          const userData = await profileApi.getCurrentUser();
+          setUser(userData);
+          setIsLoading(false);
+          return true;
+        } catch (error) {
+          console.error('AuthProvider: Failed to get user data', error);
+          setIsLoading(false);
+          return false;
+        }
       }
+
+      setIsLoading(false);
+      return !!user;
     } catch (error) {
       console.error('AuthProvider: Error checking auth:', error);
       setIsLoading(false);
@@ -120,39 +130,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      const { access_token, user } = await authApi.login(email, password);
+      const response = await authApi.login(email, password);
       
-      if (!access_token || !user) {
-        throw new Error('Invalid response from server');
+      if (response.access_token) {
+        await updateUserInfo();
+        
+        notifications.show({
+          title: 'Thành công',
+          message: 'Đăng nhập thành công',
+          color: 'green',
+        });
+        
+        router.push('/dashboard');
       }
-      
-      setUser(user);
-      setIsLoading(false);
-      
-      notifications.show({
-        title: 'Đăng nhập thành công',
-        message: `Chào mừng ${user.name}!`,
-        color: 'green',
-      });
-      
-      // Use window.location.href instead of router.push
-      window.location.href = '/dashboard';
     } catch (error: any) {
       console.error('Login error:', error);
-      setIsLoading(false);
-      
-      let errorMessage = 'Email hoặc mật khẩu không đúng';
-      if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.message === 'Network Error') {
-        errorMessage = 'Không thể kết nối đến server';
-      }
-      
       notifications.show({
-        title: 'Lỗi đăng nhập',
-        message: errorMessage,
+        title: 'Lỗi',
+        message: error.message || 'Đăng nhập thất bại',
         color: 'red',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -160,19 +159,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
-      // Call logout API first
       await authApi.logout();
       
-      // Clear user state
       setUser(null);
-      
-      // Clear all tokens
       TokenService.clearTokens();
-      
-      // Clear all localStorage items
       localStorage.clear();
-      
-      // Clear all sessionStorage items
       sessionStorage.clear();
       
       notifications.show({
@@ -181,33 +172,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         color: 'green',
       });
       
-      // Reset auth check counters
-      if (tokenValidationInterval.current) {
-        clearInterval(tokenValidationInterval.current);
-        tokenValidationInterval.current = null;
-      }
-      
-      setIsLoading(false);
-      
-      // Use window.location.href instead of router.replace
-      window.location.href = '/login';
+      router.push('/auth/login');
     } catch (error) {
       console.error('Logout error:', error);
-      
-      // Even if there's an error, still clear local state and redirect
-      setUser(null);
-      TokenService.clearTokens();
-      localStorage.clear();
-      sessionStorage.clear();
-      
       notifications.show({
         title: 'Lỗi',
-        message: 'Có lỗi xảy ra khi đăng xuất, nhưng bạn đã được đăng xuất',
+        message: 'Có lỗi xảy ra khi đăng xuất',
         color: 'red',
       });
-      
+    } finally {
       setIsLoading(false);
-      window.location.href = '/login';
     }
   };
 
@@ -233,23 +207,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Function to fetch and update user info
+  const updateUserInfo = async () => {
+    try {
+      const userData = await profileApi.getCurrentUser();
+      setUser(userData);
+    } catch (error) {
+      console.error('Error updating user info:', error);
+    }
+  };
+
   // Initialize auth state
   useEffect(() => {
     const initAuth = async () => {
       if (!initComplete.current) {
         console.log('AuthProvider: Initializing auth state');
-        await checkAndRefreshAuth();
+        // Skip auth check if on public paths
+        const pathname = window.location.pathname;
+        const isPublicPath = ['/auth/login', '/auth/register', '/auth/callback', '/auth/oauth-callback', '/auth/error']
+          .some(path => pathname.startsWith(path));
+        
+        if (!isPublicPath) {
+          await checkAndRefreshAuth();
+        }
         initComplete.current = true;
       }
     };
 
     initAuth();
 
-    // Set up periodic token validation
+    // Set up periodic token validation with longer interval
     tokenValidationInterval.current = setInterval(() => {
       console.log('AuthProvider: Periodic token validation');
-      checkAndRefreshAuth();
-    }, 5 * 60 * 1000); // Check every 5 minutes
+      // Skip validation if on public paths
+      const pathname = window.location.pathname;
+      const isPublicPath = ['/auth/login', '/auth/register', '/auth/callback', '/auth/oauth-callback', '/auth/error']
+        .some(path => pathname.startsWith(path));
+      
+      if (!isPublicPath) {
+        // Only check token validity, don't fetch user data unless necessary
+        const accessToken = TokenService.getAccessToken();
+        if (!accessToken) {
+          checkAndRefreshAuth();
+        }
+      }
+    }, 15 * 60 * 1000); // Check every 15 minutes instead of 5
 
     return () => {
       if (tokenValidationInterval.current) {
@@ -269,6 +271,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         register,
         checkAndRefreshAuth,
+        updateUserInfo,
       }}
     >
       {children}

@@ -24,6 +24,7 @@ import { notifications } from '@mantine/notifications';
 
 interface LoginResponse {
   access_token: string;
+  redirectTo?: string;
 }
 
 // Form validation schema
@@ -82,7 +83,10 @@ export default function LoginPage() {
       setIsSubmitting(true);
       console.log('Login: Attempting login with email:', values.email);
       
-      const response = await authApi.login(values.email, values.password);
+      const response = await authApi.login({
+        email: values.email,
+        password: values.password
+      });
       
       console.log('Login: Login response:', response);
       
@@ -105,8 +109,9 @@ export default function LoginPage() {
         
         // Force a small delay to ensure tokens are saved
         setTimeout(() => {
-          console.log('Login: Executing redirect to dashboard');
-          window.location.href = '/dashboard';
+          console.log('Login: Executing redirect');
+          // Use the redirectTo path from response, fallback to dashboard
+          window.location.href = response.redirectTo || '/dashboard';
         }, 500);
       } else {
         throw new Error('Không nhận được token từ server');
@@ -134,7 +139,7 @@ export default function LoginPage() {
       }
       
       // Use the proxy path for OAuth
-      const authUrl = '/api/auth/google';
+      const authUrl = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || '/auth/google/callback';
       
       console.log('Login: Initiating Google OAuth login', { authUrl });
       
@@ -160,7 +165,7 @@ export default function LoginPage() {
     <Container size="xs" my="xl">
       <Paper radius="md" p="xl" withBorder>
         <Title ta="center" order={2} mt="md" mb="md">
-          Đăng nhập vào MONKIDS
+          Đăng nhập trang quản lý
         </Title>
 
         <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -205,7 +210,7 @@ export default function LoginPage() {
 
         <Text ta="center" mt="md">
           Chưa có tài khoản?{' '}
-          <Anchor href="/register" fw={700}>
+          <Anchor href="/auth/register" fw={700}>
             Đăng ký
           </Anchor>
         </Text>

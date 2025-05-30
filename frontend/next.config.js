@@ -14,6 +14,19 @@ const nextConfig = {
     });
     return config;
   },
+  // Only for development
+  rewrites: process.env.NODE_ENV === 'development' ? async () => {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:8000/api/:path*',
+      },
+      {
+        source: '/auth/:path*',
+        destination: 'http://localhost:8000/api/auth/:path*',
+      },
+    ];
+  } : undefined,
   async headers() {
     return [
       {

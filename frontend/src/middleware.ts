@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Paths that don't require authentication
-const publicPaths = ['/login', '/register', '/', '/about', '/auth/callback', '/auth/login-success', '/auth/oauth-callback']
+const publicPaths = ['/auth/login', '/auth/register', '/', '/about', '/auth/callback', '/auth/login-success', '/auth/oauth-callback']
 
 // OAuth callback paths - these should always be allowed
 const oauthPaths = ['/auth/callback', '/auth/login-success', '/auth/oauth-callback']
@@ -11,7 +11,7 @@ const oauthPaths = ['/auth/callback', '/auth/login-success', '/auth/oauth-callba
 const profilePaths = ['/profile/new']
 
 export function middleware(request: NextRequest) {
-  // Get the path of the request
+  // Get the pathname of the request
   const path = request.nextUrl.pathname
   
   // Check if it's a public path
@@ -115,6 +115,36 @@ export function middleware(request: NextRequest) {
       console.log('[Middleware] Django session detected without token, redirecting to auth callback');
       return NextResponse.redirect(new URL('/auth/callback', request.url))
     }
+  }
+  
+  // Get the user role from the session or token
+  const userRole = request.cookies.get('user_role')?.value;
+
+  // Handle role-based redirects
+  if (path === '/dashboard') {
+    switch (userRole) {
+      case 'USER':
+        return NextResponse.redirect(new URL('/dashboard/students', request.url));
+      case 'TEACHER':
+        return NextResponse.redirect(new URL('/dashboard/teachers', request.url));
+      case 'ADMIN':
+        return NextResponse.next();
+      default:
+        return NextResponse.redirect(new URL('/auth/login', request.url));
+    }
+  }
+
+  // Protect routes based on user role
+  if (path.startsWith('/dashboard/students') && !['ADMIN', 'USER'].includes(userRole || '')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  if (path.startsWith('/dashboard/teachers') && !['ADMIN', 'TEACHER'].includes(userRole || '')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  if ((path.startsWith('/dashboard/attendance') || path.startsWith('/dashboard/accounts')) && userRole !== 'ADMIN') {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
   // Continue with the request for all other cases

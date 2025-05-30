@@ -8,41 +8,71 @@ import {
   IconHome, 
   IconUsers, 
   IconSchool, 
-  IconClockCheck
+  IconClockCheck,
+  IconUserCog
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NavItem {
-  icon: typeof IconHome;
+  icon: any;
   label: string;
   href: string;
-  requiredRoles?: ('ADMIN' | 'USER')[];
+  roles?: string[];
 }
+
+const allNavItems: NavItem[] = [
+  { 
+    icon: IconHome, 
+    label: 'Trang chủ', 
+    href: '/dashboard',
+    roles: ['ADMIN']
+  },
+  { 
+    icon: IconSchool, 
+    label: 'Học sinh', 
+    href: '/dashboard/students',
+    roles: ['ADMIN', 'USER']
+  },
+  { 
+    icon: IconUsers, 
+    label: 'Giáo viên', 
+    href: '/dashboard/teachers',
+    roles: ['ADMIN', 'TEACHER']
+  },
+  { 
+    icon: IconClockCheck, 
+    label: 'Chấm công GV', 
+    href: '/dashboard/attendance',
+    roles: ['ADMIN']
+  },
+  { 
+    icon: IconUserCog, 
+    label: 'Quản lý tài khoản', 
+    href: '/dashboard/accounts',
+    roles: ['ADMIN']
+  },
+];
 
 export default function Sidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
 
-  const navItems: NavItem[] = [
-    { icon: IconHome, label: 'Trang chủ', href: '/dashboard' },
-    { icon: IconSchool, label: 'Học sinh', href: '/dashboard/students' },
-    { icon: IconUsers, label: 'Giáo viên', href: '/dashboard/teachers' },
-    { icon: IconClockCheck, label: 'Chấm công GV', href: '/dashboard/attendance' },
-  ];
-
-  const filteredNavItems = navItems.filter(item => {
-    if (!item.requiredRoles || item.requiredRoles.length === 0) {
-      return true;
-    }
-    
-    return item.requiredRoles.some(role => user?.role === role);
+  // Filter navigation items based on user role
+  const navItems = allNavItems.filter(item => {
+    if (!item.roles) return true; // If no roles specified, show to all
+    if (!user?.role) return false; // If no user role, don't show restricted items
+    return item.roles.includes(user.role);
   });
+
+  // Debug log
+  console.log('Sidebar: User role:', user?.role);
+  console.log('Sidebar: Filtered nav items:', navItems);
 
   return (
     <Stack gap="xs">
-      {filteredNavItems.map((item) => (
+      {navItems.map((item) => (
         <NavLink
           key={item.href}
           component={Link}
