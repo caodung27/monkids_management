@@ -192,6 +192,8 @@ jobs:
             
             # Create required directories with sudo
             mkdir -p data
+            mkdir -p /tmp/.local/share/applications
+            touch /tmp/.local/share/applications/mimeapps.list
             
             # Verify docker-compose config
             docker-compose config
@@ -220,19 +222,23 @@ jobs:
                 return 1
               fi
               
+              # Get health status with proper error handling
               local health_status
-              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
+              
               echo "Container health status: ${health_status}"
               
               if [ "${health_status}" = "healthy" ]; then
                 return 0
               elif [ "${health_status}" = "starting" ]; then
-                # Show application logs to help debug startup
                 echo "Container is still starting. Recent logs:"
                 docker logs --tail 50 monkids_backend || true
+                return 1
+              else
+                echo "Container is in unexpected state: ${health_status}"
+                docker logs --tail 50 monkids_backend || true
+                return 1
               fi
-              
-              return 1
             }
             
             while [ $attempts -lt $max_attempts ]
@@ -254,14 +260,14 @@ jobs:
               
               # Exit if max attempts reached
               if [ $attempts -eq $max_attempts ]; then
-                echo "Backend failed to become healthy after $attempts attempts"
+                echo "Backend failed to become healthy after $max_attempts attempts"
                 
                 # Get final container status
-                container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}")
-                echo "Final container status: $container_status"
+                container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}" 2>/dev/null || echo "unknown")
+                echo "Final container status: ${container_status}"
                 
                 # If container is actually healthy but our script failed, don't fail the build
-                final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+                final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
                 if [ "${final_health}" = "healthy" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
@@ -275,9 +281,9 @@ jobs:
             done
             
             # Double check the container is really running and healthy before proceeding
-            final_check=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+            final_check=$(docker inspect monkids_backend --format='{{.State.Health.Status}}' 2>/dev/null)
             if [ "${final_check}" != "healthy" ]; then
-              echo "Final health check failed. Status: ${final_check}"
+              echo "Final health check failed. Status: ${final_check:-Unknown}"
               docker ps -a
               docker inspect monkids_backend || true
               exit 1
