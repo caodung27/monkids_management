@@ -54,8 +54,9 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
+# Install dependencies with clean npm cache
+RUN npm ci --only=production --legacy-peer-deps \
+    && npm cache clean --force
 
 # Copy source code
 COPY . .
@@ -70,8 +71,9 @@ ENV PUPPETEER_NO_SANDBOX=true
 ENV DISPLAY=:99
 ENV HOME=/home/pptruser
 
-# Create cache directory and set permissions
+# Create necessary directories and set permissions
 RUN mkdir -p /home/pptruser/.cache/puppeteer \
+    && mkdir -p /app/public/exports \
     && chown -R pptruser:pptruser /home/pptruser/.cache \
     && chown -R pptruser:pptruser /app \
     && chown -R pptruser:pptruser /var/run/dbus \
@@ -79,7 +81,8 @@ RUN mkdir -p /home/pptruser/.cache/puppeteer \
     && chown -R pptruser:pptruser /etc/upower \
     && chmod -R 755 /var/run/dbus \
     && chmod -R 755 /var/run/upower \
-    && chmod -R 755 /etc/upower
+    && chmod -R 755 /etc/upower \
+    && chmod -R 777 /app/public/exports
 
 # Switch to pptruser
 USER pptruser
