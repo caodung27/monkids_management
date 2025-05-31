@@ -2,19 +2,22 @@ FROM amazonlinux:2 as builder
 
 WORKDIR /app
 
-# Install Node.js 16 and build dependencies in one layer
+# Install Node.js 16 and build dependencies
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
-    && yum install -y nodejs \
+    && yum install -y nodejs git python3 make gcc-c++ \
     && yum clean all \
-    && rm -rf /var/cache/yum
+    && rm -rf /var/cache/yum \
+    && npm install -g npm@latest
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
 
-# Install ALL dependencies including devDependencies for build
-RUN npm install \
-    && npm i -g @nestjs/cli \
-    && npm cache clean --force
+# Install dependencies with verbose logging and legacy peer deps
+RUN set -x \
+    && npm install --verbose --legacy-peer-deps \
+    && npm install -g @nestjs/cli \
+    && npm cache clean --force \
+    && npm list -g --depth=0
 
 # Copy source and build
 COPY . .
