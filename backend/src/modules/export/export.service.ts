@@ -31,12 +31,20 @@ export class ExportService {
   private async initBrowser() {
     this.browser = await puppeteer.launch({
       headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--single-process',
+        '--no-zygote'
       ],
+      env: {
+        DISPLAY: ':99'
+      }
     });
   }
 

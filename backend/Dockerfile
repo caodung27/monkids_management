@@ -19,8 +19,7 @@ RUN apt-get update \
 # Add user for running Chrome
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/Downloads \
-    && chown -R pptruser:pptruser /home/pptruser \
-    && chown -R pptruser:pptruser /app
+    && chown -R pptruser:pptruser /home/pptruser
 
 # Copy package files
 COPY package*.json ./
@@ -37,7 +36,13 @@ RUN npm run build
 # Add puppeteer configuration
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+ENV PUPPETEER_NO_SANDBOX=true
 ENV DISPLAY=:99
+
+# Create cache directory and set permissions
+RUN mkdir -p /root/.cache/puppeteer \
+    && chown -R pptruser:pptruser /root/.cache/puppeteer \
+    && chown -R pptruser:pptruser /app
 
 # Switch to pptruser
 USER pptruser
@@ -46,4 +51,4 @@ USER pptruser
 EXPOSE 8000
 
 # Start application with Xvfb
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x16 & npm run start:prod"]
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]
