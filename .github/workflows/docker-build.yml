@@ -97,7 +97,7 @@ jobs:
                 - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
                 - CHROME_PATH=/usr/bin/google-chrome
                 - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage
+                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu
               security_opt:
                 - seccomp=unconfined
               cap_add:
@@ -108,6 +108,8 @@ jobs:
                 - /tmp
                 - /run
                 - /run/lock
+                - /dev/shm
+              ipc: host
               deploy:
                 resources:
                   limits:
@@ -117,11 +119,10 @@ jobs:
                     cpus: '0.5'
                     memory: 1G
               healthcheck:
-                test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8000/api/health || exit 1"]
+                test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
                 interval: 10s
                 timeout: 5s
                 retries: 5
-                start_period: 20s
               networks:
                 - monkids-network
           
@@ -211,38 +212,38 @@ jobs:
             
             # Wait for backend to be healthy with better logging
             echo 'Waiting for backend to be healthy...'
-            MAX_ATTEMPTS=5
-            ATTEMPT=1
-            CONTAINER_STATUS=""
+            attempts=0
+            max_attempts=5
+            status=""
             
-            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Checking backend health..."
+            while [ $attempts -lt $max_attempts ]
+            do
+              attempts=$((attempts + 1))
+              echo "Health check attempt $attempts/$max_attempts"
               sleep 10
               
-              CONTAINER_STATUS=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
-              echo "Container health status: $CONTAINER_STATUS"
+              status=$(docker inspect monkids_backend --format='{{.State.Health.Status}}' 2>/dev/null || echo "error")
+              echo "Container health status: $status"
               
-              if [ "$CONTAINER_STATUS" = "healthy" ]; then
-                echo 'Backend is healthy'
+              if [ "$status" = "healthy" ]; then
+                echo "Backend is healthy!"
                 break
               fi
               
               echo "Recent backend logs:"
               docker logs --tail 20 monkids_backend || true
               
-              if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-                echo 'Backend failed to become healthy. Showing logs and status:'
+              if [ $attempts -eq $max_attempts ]; then
+                echo "Backend failed to become healthy after $max_attempts attempts"
                 docker ps
                 docker logs monkids_backend || true
                 docker inspect monkids_backend || true
                 exit 1
               fi
-              
-              ATTEMPT=$((ATTEMPT + 1))
             done
             
             # Only start nginx if backend is healthy
-            if [ "$CONTAINER_STATUS" = "healthy" ]; then
+            if [ "$status" = "healthy" ]; then
               echo "Starting nginx..."
               docker-compose up -d nginx
               
@@ -250,8 +251,10 @@ jobs:
               sleep 5
               
               # Verify nginx is running
-              NGINX_STATUS=$(docker inspect --format='{{.State.Health.Status}}' nginx 2>/dev/null || echo "error")
-              if [ "$NGINX_STATUS" != "healthy" ]; then
+              nginx_status=$(docker inspect nginx --format='{{.State.Health.Status}}' 2>/dev/null || echo "error")
+              echo "Nginx health status: $nginx_status"
+              
+              if [ "$nginx_status" != "healthy" ]; then
                 echo 'Nginx failed to start or become healthy'
                 docker logs nginx || true
                 exit 1
