@@ -66,29 +66,17 @@ jobs:
           chmod 600 ~/.ssh/key
           echo -e "Host ec2\n\tHostName $EC2_HOST\n\tUser $EC2_USERNAME\n\tIdentityFile ~/.ssh/key\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile=/dev/null" > ~/.ssh/config
 
-      - name: Deploy to EC2
+      - name: Prepare Deployment Files
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
-          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
-          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
-          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
-          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
-          JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
-          JWT_REFRESH_EXPIRATION: ${{ secrets.JWT_REFRESH_EXPIRATION }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
-          PORT: ${{ secrets.PORT }}
-          NODE_ENV: production
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: |
-          # First, create the docker-compose.yml file locally
-          cat > docker-compose.yml << 'EOL'
+          # Create deployment directory
+          mkdir -p deploy
+          cd deploy
+          
+          # Create docker-compose.yml
+          cat > docker-compose.yml << 'EOFDC'
           version: '3.8'
-
+          
           services:
             backend:
               image: ${DOCKER_USERNAME}/monkids-backend:latest
@@ -140,10 +128,11 @@ jobs:
                 start_period: 40s
               networks:
                 - monkids-network
-
+          
             nginx:
               image: nginx:alpine
               container_name: nginx
+              restart: unless-stopped
               ports:
                 - "80:80"
                 - "443:443"
@@ -173,21 +162,67 @@ jobs:
                 interval: 30s
                 timeout: 10s
                 retries: 3
-              restart: unless-stopped
-
+          
           networks:
             monkids-network:
               external: true
-
+          
           volumes:
             nginx-cache:
-          EOL
+          EOFDC
+          
+          # Create .env file
+          cat > .env << 'EOFENV'
+          DATABASE_HOST=${DATABASE_HOST}
+          DATABASE_PORT=${DATABASE_PORT}
+          DATABASE_USERNAME=${DATABASE_USERNAME}
+          DATABASE_PASSWORD=${DATABASE_PASSWORD}
+          DATABASE_NAME=${DATABASE_NAME}
+          JWT_SECRET=${JWT_SECRET}
+          JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+          JWT_EXPIRATION=${JWT_EXPIRATION}
+          JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
+          GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+          GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+          GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+          PORT=${PORT}
+          NODE_ENV=production
+          FRONTEND_URL=${FRONTEND_URL}
+          DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          EOFENV
+          
+          # Copy nginx configuration
+          cp -r ../nginx .
 
-          # Copy files to EC2
-          scp docker-compose.yml ec2:~/monkid_management/
-          scp -r nginx ec2:~/monkid_management/
-
-          # Execute deployment on EC2
+      - name: Deploy to EC2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+          JWT_REFRESH_EXPIRATION: ${{ secrets.JWT_REFRESH_EXPIRATION }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
+          PORT: ${{ secrets.PORT }}
+          NODE_ENV: production
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+        run: |
+          # Copy deployment files to EC2
+          cd deploy
+          envsubst < .env > .env.tmp && mv .env.tmp .env
+          envsubst < docker-compose.yml > docker-compose.yml.tmp && mv docker-compose.yml.tmp docker-compose.yml
+          
+          echo "Copying files to EC2..."
+          ssh ec2 "mkdir -p ~/monkid_management"
+          scp -r * ec2:~/monkid_management/
+          
+          echo "Starting deployment on EC2..."
           ssh ec2 "
             set -ex
             cd ~/monkid_management
@@ -202,26 +237,6 @@ jobs:
             # Create network if it doesn't exist
             docker network create monkids-network 2>/dev/null || true
             
-            # Setup environment (without spaces in keys)
-            cat > .env << EOL
-            DATABASE_HOST=${DATABASE_HOST}
-            DATABASE_PORT=${DATABASE_PORT}
-            DATABASE_USERNAME=${DATABASE_USERNAME}
-            DATABASE_PASSWORD=${DATABASE_PASSWORD}
-            DATABASE_NAME=${DATABASE_NAME}
-            JWT_SECRET=${JWT_SECRET}
-            JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-            JWT_EXPIRATION=${JWT_EXPIRATION}
-            JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
-            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-            GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-            GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-            PORT=${PORT}
-            NODE_ENV=production
-            FRONTEND_URL=${FRONTEND_URL}
-            DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            EOL
-            
             # Create required directories
             mkdir -p data /tmp/.X11-unix
             chmod 1777 /tmp/.X11-unix
@@ -229,11 +244,9 @@ jobs:
             # Verify docker-compose config
             docker-compose config
             
-            # Pull latest images
-            docker-compose pull --quiet
-            
-            # Start services
+            # Pull and start services
             docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker-compose pull --quiet
             docker-compose up -d
             
             # Wait for backend to be healthy
@@ -243,7 +256,7 @@ jobs:
                 echo 'Backend is healthy'
                 break
               fi
-              if [ $i -eq 30 ]; then
+              if [ \$i -eq 30 ]; then
                 echo 'Backend failed to become healthy'
                 docker logs monkids_backend
                 exit 1
