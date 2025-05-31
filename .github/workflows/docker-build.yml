@@ -97,9 +97,10 @@ jobs:
                 - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
                 - CHROME_PATH=/usr/bin/google-chrome
                 - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless
+                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new
                 - NO_SANDBOX=true
                 - DBUS_SESSION_BUS_ADDRESS=/dev/null
+                - DISPLAY=:99
               security_opt:
                 - seccomp=unconfined
               cap_add:
@@ -107,10 +108,10 @@ jobs:
               volumes:
                 - ./data:/app/data
               tmpfs:
-                - /tmp:exec,mode=1777
+                - /tmp:exec,mode=1777,size=2G
                 - /run:exec,mode=1777
                 - /run/lock:exec,mode=1777
-                - /dev/shm:mode=1777
+                - /dev/shm:mode=1777,size=2G
               ipc: host
               deploy:
                 resources:
@@ -216,14 +217,24 @@ jobs:
             echo 'Waiting for backend to be healthy...'
             attempts=0
             max_attempts=5
-            status=""
             
             while [ $attempts -lt $max_attempts ]
             do
               attempts=$((attempts + 1))
               echo "Health check attempt $attempts/$max_attempts"
-              sleep 10
               
+              # Give container time to initialize
+              sleep 15
+              
+              # Check if container is running first
+              if ! docker ps | grep -q monkids_backend; then
+                echo "Container is not running"
+                docker ps -a
+                docker logs monkids_backend || true
+                exit 1
+              fi
+              
+              # Get container health status
               status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
               echo "Container health status: $status"
               
@@ -232,20 +243,14 @@ jobs:
                 break
               fi
               
-              if [ "$status" = "error" ]; then
-                echo "Error getting container status"
-                docker ps -a
-                docker logs monkids_backend || true
-                continue
-              fi
-              
+              # Show recent logs for debugging
               echo "Recent backend logs:"
-              docker logs --tail 20 monkids_backend || true
+              docker logs --tail 50 monkids_backend || true
               
+              # Exit if max attempts reached
               if [ $attempts -eq $max_attempts ]; then
                 echo "Backend failed to become healthy after $max_attempts attempts"
-                docker ps
-                docker logs monkids_backend || true
+                docker ps -a
                 docker inspect monkids_backend || true
                 exit 1
               fi
