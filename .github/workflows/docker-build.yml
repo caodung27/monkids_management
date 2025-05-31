@@ -200,10 +200,10 @@ jobs:
           cd ~/monkid_management
           export DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
           export DOCKER_IMAGE=${{ env.DOCKER_IMAGE }}
-          docker compose down
+          docker-compose down
           docker system prune -f
-          docker compose pull
-          docker compose up -d --force-recreate backend
+          docker-compose pull
+          docker-compose up -d --force-recreate backend
           "
 
       - name: Monitor Deployment
