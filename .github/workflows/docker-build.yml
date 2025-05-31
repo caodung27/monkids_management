@@ -16,7 +16,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:latest
+  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
 
 jobs:
   build-and-deploy:
@@ -45,8 +45,8 @@ jobs:
         with:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
             type=ref,event=branch
             type=ref,event=pr
 
