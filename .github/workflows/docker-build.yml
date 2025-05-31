@@ -142,16 +142,16 @@ jobs:
             fi
             
             echo 'Verifying docker-compose configuration...'
-            docker-compose config
+            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose config
             
             echo 'Logging into Docker Hub...'
-            cat .env | grep DOCKERHUB_TOKEN | cut -d '=' -f2 | docker login -u \$(cat .env | grep DOCKERHUB_USERNAME | cut -d '=' -f2) --password-stdin
+            docker login -u '$DOCKERHUB_USERNAME' -p '$DOCKERHUB_TOKEN'
             
             echo 'Pulling images...'
-            docker-compose pull --quiet
+            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose pull --quiet
             
             echo 'Starting backend...'
-            docker-compose up -d backend
+            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d backend
             
             echo 'Initial backend logs:'
             docker logs monkids_backend || true
@@ -226,7 +226,7 @@ jobs:
               echo 'Backend container is verified healthy and ready for nginx'
               
               echo 'Starting nginx...'
-              docker-compose up -d nginx
+              DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d nginx
               
               echo 'Waiting for nginx to start...'
               sleep 10
