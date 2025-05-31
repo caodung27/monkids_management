@@ -30,7 +30,7 @@ FROM amazonlinux:2
 
 WORKDIR /app
 
-# Install Node.js 16 and dependencies
+# Install Node.js and Chrome dependencies
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum install -y nodejs wget \
     && amazon-linux-extras install epel -y \
