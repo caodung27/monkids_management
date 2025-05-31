@@ -1,58 +1,96 @@
-export function renderTeacherSalaryHTML(teacher: any) {
+export function renderTeacherSalaryHTML(teacher: any, month: number, year: number) {
   function vnd(val: number) {
     return (Math.round(val ?? 0)).toLocaleString('vi-VN').replace(/\s/g, '') + 'đ';
   }
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
   return `
     <html>
     <head>
       <style>
-        body { font-family: Arial; background: #fff; }
-        #receipt-root {
-          width: 1240px;
-          min-height: 1754px;
+        body { 
+          font-family: Arial; 
           background: #fff;
-          margin: 40px auto;
-          box-shadow: 0 4px 32px #bbb;
-          padding: 48px 40px;
-          box-sizing: border-box;
-          border-radius: 18px;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
+          font-size: 12px;
         }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #000; padding: 10px; font-size: 20px; }
-        th { background: #eee; }
+        #receipt-root {
+          width: 800px;
+          margin: 20px auto;
+          padding: 20px;
+        }
+        table { 
+          border-collapse: collapse; 
+          width: 100%;
+          margin: 10px 0;
+        }
+        th, td { 
+          border: 1px solid #000; 
+          padding: 5px 8px;
+          font-size: 12px;
+        }
+        th { 
+          background: #f5f5f5;
+          text-align: center;
+        }
         .bold { font-weight: bold; }
         .center { text-align: center; }
         .right { text-align: right; }
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .header-left { font-size:28px; font-weight:bold; }
-        .header-right { font-size:22px; font-weight:bold; text-transform:uppercase; }
-        .salary-title { font-size:32px; font-weight:bold; text-align:center; margin-bottom: 8px; }
-        .salary-month { text-align:center; font-size:22px; margin-bottom: 16px; }
-        .info-table td { border: 1px solid #000; font-size:20px; }
-        .info-table { margin-bottom: 16px; }
-        .total-row { font-weight: bold; }
+        .header { 
+          text-align: center;
+          margin-bottom: 15px;
+        }
+        .school-name {
+          font-size: 14px;
+          font-weight: bold;
+          margin-bottom: 5px;
+        }
+        .title {
+          font-size: 16px;
+          font-weight: bold;
+          margin: 10px 0;
+        }
+        .info-table td {
+          border: 1px solid #000;
+          padding: 5px 8px;
+        }
+        .info-table td:first-child {
+          width: 100px;
+        }
+        .total-row {
+          font-weight: bold;
+        }
+        .note {
+          font-size: 11px;
+          margin-top: 10px;
+        }
+        .signature {
+          text-align: right;
+          margin-top: 15px;
+          font-style: italic;
+        }
       </style>
     </head>
     <body>
       <div id="receipt-root">
-        <div class="header-row">
-          <div class="header-left">MẦM NON MONKIDS</div>
-          <div class="header-right">SỐ: ${teacher.teacher_no ?? ''}</div>
+        <div class="header">
+          <div class="school-name">MẦM NON MONKIDS</div>
+          <div class="title">PHIẾU LƯƠNG GIÁO VIÊN</div>
+          <div>Tháng ${month} Năm ${year}</div>
         </div>
-        <div class="salary-title">PHIẾU LƯƠNG GIÁO VIÊN</div>
-        <div class="salary-month">Tháng ${month} Năm ${year}</div>
-        <br/>
-        <table class="info-table">
-          <tr><td>Họ tên:</td><td>${teacher.name ?? ''}</td></tr>
-          <tr><td>Chức vụ:</td><td>${teacher.role ?? ''}</td></tr>
-          <tr><td>SDT:</td><td>${teacher.phone || ''}</td></tr>
+
+        <table class="info-table" style="border: none;">
+          <tr>
+            <td>Họ tên:</td>
+            <td>${teacher.name ?? ''}</td>
+          </tr>
+          <tr>
+            <td>Chức vụ:</td>
+            <td>${teacher.role ?? ''}</td>
+          </tr>
+          <tr>
+            <td>SĐT:</td>
+            <td>${teacher.phone || ''}</td>
+          </tr>
         </table>
+
         <table>
           <tr>
             <th>Nội dung</th>
@@ -131,10 +169,15 @@ export function renderTeacherSalaryHTML(teacher: any) {
             <td class="right">${vnd(teacher.total_salary)}</td>
           </tr>
         </table>
-        <br/>
-        <div style="font-size:15px;">GV có 25 ngày công vào tháng ${month < 10 ? '0' + month : month}/${year}.</div>
-        <div style="font-size:15px;">Nếu dạy nhiều hơn 25 ngày công sẽ được tính 150.000 / 1 ngày dạy thêm.</div>
-        <div style="text-align:right; font-size:15px;">Vĩnh Yên, ngày ... tháng ... năm ...</div>
+
+        <div class="note">
+          GV có 25 ngày công vào tháng ${month < 10 ? '0' + month : month}/${year}.<br>
+          Nếu dạy nhiều hơn 25 ngày công sẽ được tính 150.000 / 1 ngày dạy thêm.
+        </div>
+
+        <div class="signature">
+          Vĩnh Yên, ngày ... tháng ... năm ...
+        </div>
       </div>
     </body>
     </html>

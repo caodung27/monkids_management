@@ -507,9 +507,51 @@ export const attendanceApi = {
 export const exportApi = {
   bulkExport: async (type: 'student' | 'teacher', ids: string[]) => {
     try {
-      const response = await apiClient.post('/export/bulk', { type, ids });
-      return response.data;
+      const response = await apiClient.post('/export/bulk', { type, ids }, {
+        responseType: 'blob',
+        timeout: 30000, // Increase timeout to 30 seconds for large files
+      });
+
+      // Verify that we received a zip file
+      if (response.headers['content-type'] !== 'application/zip') {
+        throw new Error('Invalid response format');
+      }
+
+      // Create a blob from the response data
+      const blob = new Blob([response.data], { type: 'application/zip' });
+
+      // Get current month and year for filename
+      const currentDate = new Date();
+      const currentMonth = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+      const currentYear = currentDate.getFullYear();
+      const fileName = `MONKIDS_T${currentMonth}_${currentYear}.zip`;
+
+      // Create a link element and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      return { success: true, message: 'Export completed successfully' };
     } catch (error) {
+      // If the error response is a blob, we need to read it
+      if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+        const text = await error.response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || 'Export failed');
+        } catch (e) {
+          throw new Error('Failed to process export response');
+        }
+      }
       handleApiError(error);
       throw error;
     }

@@ -1,76 +1,113 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 export function renderStudentReceiptHTML(student: any, month: number, year: number) {
   function vnd(val: number) {
     return (Math.round(val ?? 0)).toLocaleString('vi-VN').replace(/\s/g, '') + 'đ';
   }
+
+  // Read and convert QR code to base64
+  const qrPath = path.join(process.cwd(), 'public', 'qr.png');
+  const qrBase64 = fs.readFileSync(qrPath, { encoding: 'base64' });
+  const qrDataUrl = `data:image/png;base64,${qrBase64}`;
+
   const discount = student.discount_percentage ? student.discount_percentage * 100 : 0;
   return `
     <html>
     <head>
       <style>
-        body { font-family: Arial; background: #fff; }
-        #receipt-root {
-          width: 1240px;
-          min-height: 1754px;
+        body { 
+          font-family: Arial; 
           background: #fff;
-          margin: 40px auto;
-          box-shadow: 0 4px 32px #bbb;
-          padding: 48px 40px;
-          box-sizing: border-box;
-          border-radius: 18px;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
+          font-size: 12px;
         }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #000; padding: 10px; font-size: 20px; }
-        th { background: #eee; }
+        #receipt-root {
+          width: 800px;
+          margin: 20px auto;
+          padding: 20px;
+        }
+        table { 
+          border-collapse: collapse; 
+          width: 100%;
+          margin: 10px 0;
+        }
+        th, td { 
+          border: 1px solid #000; 
+          padding: 5px 8px;
+          font-size: 12px;
+        }
+        th { 
+          background: #f5f5f5;
+          text-align: center;
+        }
         .bold { font-weight: bold; }
         .center { text-align: center; }
         .right { text-align: right; }
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .header-left { font-size:28px; font-weight:bold; }
-        .header-right { font-size:22px; font-weight:bold; text-transform:uppercase; }
-        .receipt-title { font-size:32px; font-weight:bold; text-align:center; margin-bottom: 8px; }
-        .receipt-month { text-align:center; font-size:22px; margin-bottom: 16px; }
-        .info-table td { border: 1px solid #000; font-size:20px; }
-        .info-table { margin-bottom: 16px; }
-        .total-row { font-weight: bold; }
+        .header { 
+          text-align: center;
+          margin-bottom: 15px;
+        }
+        .school-name {
+          font-size: 14px;
+          font-weight: bold;
+          margin-bottom: 5px;
+        }
+        .title {
+          font-size: 16px;
+          font-weight: bold;
+          margin: 10px 0;
+        }
+        .info-table td {
+          border: 1px solid #000;
+          padding: 5px 8px;
+        }
+        .info-table td:first-child {
+          width: 100px;
+        }
+        .total-row {
+          font-weight: bold;
+        }
         .qr-code-container {
           width: 100%;
-          min-height: 600px;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 24px 0 12px 0;
-          flex-shrink: 0;
+          text-align: center;
+          margin: 20px 0;
         }
         #qr-img {
-          width: 400px;
-          height: 400px;
+          width: 200px;
+          height: 200px;
           display: inline-block;
           object-fit: contain;
-          border: 2px solid #e9ecef;
-          background: #fff;
-          box-shadow: 0 4px 16px #ddd;
-          border-radius: 12px;
-          padding: 8px;
+        }
+        .note {
+          font-size: 11px;
+          margin-top: 10px;
+          text-align: center;
         }
       </style>
     </head>
     <body>
       <div id="receipt-root">
-        <div class="header-row">
-          <div class="header-left">MẦM NON MONKIDS</div>
-          <div class="header-right">SỐ: ${student.student_id ?? ''}</div>
+        <div class="header">
+          <div class="school-name">MẦM NON MONKIDS</div>
+          <div class="title">BIÊN LAI THU TIỀN</div>
+          <div>Tháng ${month} Năm ${year}</div>
         </div>
-        <div class="receipt-title">BIÊN LAI THU TIỀN</div>
-        <div class="receipt-month">Tháng ${month} Năm ${year}</div>
-        <br/>
+
         <table class="info-table">
-          <tr><td>Họ tên:</td><td>${student.name ?? ''}</td></tr>
-          <tr><td>Ngày sinh:</td><td>${student.birthdate ? (new Date(student.birthdate)).toLocaleDateString('vi-VN') : ''}</td></tr>
-          <tr><td>Lớp:</td><td>${student.classroom ?? ''}</td></tr>
+          <tr>
+            <td>Họ tên:</td>
+            <td>${student.name ?? ''}</td>
+          </tr>
+          <tr>
+            <td>Ngày sinh:</td>
+            <td>${student.birthdate ? (new Date(student.birthdate)).toLocaleDateString('vi-VN') : ''}</td>
+          </tr>
+          <tr>
+            <td>Lớp:</td>
+            <td>${student.classroom ?? ''}</td>
+          </tr>
         </table>
+
         <table>
           <tr>
             <th>Nội dung</th>
@@ -123,13 +160,19 @@ export function renderStudentReceiptHTML(student: any, month: number, year: numb
             <td class="right">${vnd(student.remaining_amount)}</td>
           </tr>
         </table>
-        <br/>
-        <div style="text-align:right;">Vĩnh Yên, ngày ... tháng ... năm ...</div>
-        <div style="text-align:center; margin: 40px 0 12px 0;">
-          <img id="qr-img" src="/public/qr.png" alt="QR Code thanh toán" />
+
+        <div style="text-align:right; margin-top: 15px; font-style: italic;">
+          Vĩnh Yên, ngày ... tháng ... năm ...
         </div>
-        <div style="text-align:center;">Phụ huynh thanh toán từ ngày 05 đến 10 hàng tháng</div>
-        <div style="text-align:center;">Phụ huynh thanh toán ghi rõ họ tên và lớp của con</div>
+
+        <div class="qr-code-container">
+          <img id="qr-img" src="${qrDataUrl}" alt="QR Code thanh toán" />
+        </div>
+
+        <div class="note">
+          Phụ huynh thanh toán từ ngày 05 đến 10 hàng tháng<br>
+          Phụ huynh thanh toán ghi rõ họ tên và lớp của con
+        </div>
       </div>
     </body>
     </html>

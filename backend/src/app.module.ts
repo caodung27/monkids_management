@@ -13,7 +13,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { StatsModule } from './modules/stats.module';
 import { CronService } from './services/cron.service';
-import { ExportModule } from './export/export.module';
+import { ExportModule } from './modules/export/export.module';
 
 @Module({
   imports: [
