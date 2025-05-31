@@ -86,7 +86,7 @@ jobs:
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: |
           ssh ec2 "
-            set -e
+            set -ex
             cd ~/monkid_management
             
             # Stop and remove existing containers
@@ -98,6 +98,9 @@ jobs:
             
             # Create network if it doesn't exist
             docker network create monkids-network 2>/dev/null || true
+            
+            # Copy docker-compose file from backend to root
+            cp backend/docker-compose.yml .
             
             # Setup environment
             cat > .env << 'EOL'
@@ -119,22 +122,24 @@ jobs:
             DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
             EOL
             
+            # Create required directories
+            mkdir -p data /tmp/.X11-unix
+            chmod 1777 /tmp/.X11-unix
+            
+            # Verify docker-compose config
+            docker-compose config
+            
             # Pull latest images
-            docker-compose pull --quiet --parallel
+            docker-compose pull --quiet
             
-            # Create required directories with proper permissions
-            docker run --rm -v \$(pwd):/app -w /app node:18-alpine sh -c '
-              mkdir -p /app/.local/share/fonts /app/.local/share/applications
-              chown -R 1000:1000 /app/.local
-            '
-            
-            # Start backend first
-            docker-compose up -d backend
+            # Start services
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker-compose up -d
             
             # Wait for backend to be healthy
             echo 'Waiting for backend to be healthy...'
             for i in {1..30}; do
-              if curl -sf http://localhost:8000/api/health >/dev/null; then
+              if docker ps | grep -q 'monkids_backend.*healthy'; then
                 echo 'Backend is healthy'
                 break
               fi
@@ -143,19 +148,14 @@ jobs:
                 docker logs monkids_backend
                 exit 1
               fi
-              sleep 2
+              echo "Attempt $i: Checking backend health..."
+              docker ps
+              sleep 5
             done
             
-            # Start nginx only after backend is confirmed healthy
-            echo 'Starting nginx...'
-            docker-compose up -d nginx
-            
-            # Wait for nginx to start
-            sleep 5
-            
             # Verify nginx is running
-            if ! docker ps | grep -q nginx; then
-              echo 'Nginx failed to start'
+            if ! docker ps | grep -q 'nginx.*healthy'; then
+              echo 'Nginx failed to start or become healthy'
               docker logs nginx
               exit 1
             fi
@@ -168,17 +168,33 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           # Wait for services to be fully ready
-          sleep 10
+          sleep 15
           
           # Try to verify deployment
           for i in {1..3}; do
             echo "Verification attempt $i/3..."
             
             if ssh ec2 "
-              # Check backend health
+              set -x
+              
+              # Check backend container status
+              if ! docker ps | grep -q 'monkids_backend.*healthy'; then
+                echo 'Backend container is not healthy'
+                docker logs monkids_backend
+                exit 1
+              fi
+              
+              # Check backend health endpoint
               if ! curl -sf http://localhost:8000/api/health >/dev/null; then
                 echo 'Backend health check failed'
                 docker logs --tail 50 monkids_backend
+                exit 1
+              fi
+              
+              # Check nginx container status
+              if ! docker ps | grep -q 'nginx.*healthy'; then
+                echo 'Nginx container is not healthy'
+                docker logs nginx
                 exit 1
               fi
               
@@ -198,21 +214,26 @@ jobs:
             [ $i -eq 3 ] && { 
               echo "=== Final Status ==="
               ssh ec2 "
+                set -x
                 echo 'Container Status:'
                 docker ps -a
                 echo 'Backend Logs:'
-                docker logs --tail 50 monkids_backend
+                docker logs --tail 50 monkids_backend || true
                 echo 'Nginx Logs:'
-                docker logs --tail 50 nginx
+                docker logs --tail 50 nginx || true
                 echo 'Docker Compose Config:'
                 docker-compose config
                 echo 'Network Status:'
                 docker network inspect monkids-network
+                echo 'Directory Structure:'
+                ls -la
+                echo 'Environment File:'
+                cat .env | grep -v -E 'PASSWORD|SECRET|TOKEN'
               "
               echo "Verification failed after 3 attempts"
               exit 1
             }
             
             echo "Waiting before next attempt..."
-            sleep 10
+            sleep 15
           done 
