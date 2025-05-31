@@ -265,13 +265,25 @@ jobs:
                 if [ "${final_health}" = "healthy" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
+                else
+                  echo "Container health status: ${final_health}"
+                  docker ps -a
+                  docker inspect monkids_backend || true
+                  exit 1
                 fi
-                
-                docker ps -a
-                docker inspect monkids_backend || true
-                exit 1
               fi
             done
+            
+            # Double check the container is really running and healthy before proceeding
+            final_check=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+            if [ "${final_check}" != "healthy" ]; then
+              echo "Final health check failed. Status: ${final_check}"
+              docker ps -a
+              docker inspect monkids_backend || true
+              exit 1
+            fi
+            
+            echo "Backend container is healthy and ready for nginx"
             
             # Only start nginx if backend is healthy
             if [ "$status" = "healthy" ]; then
