@@ -123,7 +123,7 @@ jobs:
               healthcheck:
                 test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/health || exit 1"]
                 interval: 10s
-                timeout: 5s
+                timeout: 10s
                 retries: 5
                 start_period: 30s
               networks:
@@ -226,7 +226,7 @@ jobs:
               local health_status
               
               # Check if container exists and is running
-              if ! docker ps | grep -q monkids_backend; then
+              if ! docker ps --format '{{.Names}}' | grep -q '^monkids_backend$'; then
                 echo "Container is not running"
                 docker ps -a
                 docker logs monkids_backend || true
@@ -283,7 +283,7 @@ jobs:
               docker logs --tail 50 monkids_backend || true
               
               # Exit if max attempts reached
-              if [ $attempts -eq $max_attempts ]; then
+              if [ "$attempts" -eq "$max_attempts" ]; then
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
                 # Get final status
