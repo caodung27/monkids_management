@@ -121,7 +121,7 @@ jobs:
                 - /dev/shm:mode=1777,size=2G
               ipc: host
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+                test: ["CMD", "/bin/sh", "-c", "wget -q --spider http://localhost:8000/api/health || exit 1"]
                 interval: 10s
                 timeout: 5s
                 retries: 3
@@ -145,10 +145,11 @@ jobs:
               depends_on:
                 backend:
                   condition: service_healthy
+                  required: true
               networks:
                 - monkids-network
               healthcheck:
-                test: ["CMD", "nginx", "-t"]
+                test: ["CMD", "wget", "-q", "--spider", "http://localhost"]
                 interval: 10s
                 timeout: 5s
                 retries: 3
@@ -224,8 +225,12 @@ jobs:
                 return 1
               fi
               
-              # Get detailed container status
+              # Get detailed container status and health
               container_status=\$(docker inspect --format='{{.State.Status}}' \"\$container_id\" 2>/dev/null)
+              health_status=\$(docker inspect --format='{{.State.Health.Status}}' \"\$container_id\" 2>/dev/null)
+              
+              echo \"Container status: \${container_status:-unknown}, health: \${health_status:-unknown}\"
+              
               if [ \"\$container_status\" != 'running' ]; then
                 echo \"Container is not running (status: \${container_status:-unknown})\"
                 docker logs \"\$container_id\" || true
@@ -241,10 +246,11 @@ jobs:
               
               # Test health endpoint with retry
               for i in {1..3}; do
-                if curl -sf http://localhost:8000/api/health 2>/dev/null; then
+                if wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
                   echo 'Health endpoint check passed'
                   return 0
                 fi
+                echo \"Health check attempt \$i failed, retrying...\"
                 sleep 2
               done
               
@@ -269,6 +275,10 @@ jobs:
                 echo 'Backend is healthy!'
                 break
               fi
+              
+              # Show container status on failure
+              docker ps -a
+              docker inspect monkids_backend --format='{{.State.Health}}' || true
               
               # Exit if max attempts reached
               if [ \$attempts -eq \$max_attempts ]; then
@@ -300,7 +310,7 @@ jobs:
               fi
               
               # Verify nginx configuration
-              if ! docker exec nginx nginx -t 2>/dev/null; then
+              if ! docker exec nginx wget -q --spider http://localhost 2>/dev/null; then
                 echo 'Nginx configuration test failed'
                 docker logs nginx || true
                 exit 1
@@ -313,7 +323,7 @@ jobs:
                 
                 # Test nginx proxy to backend
                 echo 'Testing nginx proxy to backend...'
-                if curl -sf http://localhost/api/health 2>/dev/null; then
+                if wget -q --spider http://localhost/api/health 2>/dev/null; then
                   echo 'Nginx proxy test successful'
                 else
                   echo 'Nginx proxy test failed'
@@ -356,7 +366,7 @@ jobs:
               fi
               
               # Check backend health endpoint
-              if ! curl -sf http://localhost:8000/api/health >/dev/null; then
+              if ! wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
                 echo 'Backend health check failed'
                 docker logs --tail 50 monkids_backend
                 exit 1
@@ -370,7 +380,7 @@ jobs:
               fi
               
               # Check nginx/https
-              if ! curl -sfk https://api.monkids.site/api/health >/dev/null; then
+              if ! wget -q --spider --timeout=5 https://api.monkids.site/api/health 2>/dev/null; then
                 echo 'HTTPS health check failed'
                 docker logs --tail 50 nginx
                 exit 1
