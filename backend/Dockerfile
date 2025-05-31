@@ -6,31 +6,31 @@ WORKDIR /app
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum install -y nodejs git python3 make gcc-c++ \
     && yum clean all \
-    && rm -rf /var/cache/yum \
-    && npm install -g npm@8.19.4
+    && rm -rf /var/cache/yum
+
+# Update npm to a specific version and clear cache
+RUN npm install -g npm@8.19.4 \
+    && npm cache clean --force
 
 # Copy package files first
 COPY package*.json ./
 
-# Install dependencies with verbose logging and legacy peer deps
-RUN set -x \
-    && npm install --verbose --legacy-peer-deps \
+# Install dependencies
+RUN npm ci --verbose \
     && npm install -g @nestjs/cli@9.5.0 \
-    && npm cache clean --force \
-    && npm list -g --depth=0
+    && npm cache clean --force
 
 # Copy source and build
 COPY . .
 RUN npm run build \
-    && npm prune --production \
-    && rm -rf src tsconfig.json tsconfig.build.json nest-cli.json
+    && npm prune --production
 
 # Production stage
 FROM amazonlinux:2
 
 WORKDIR /app
 
-# Install Node.js and Chrome dependencies
+# Install Node.js and Chrome dependencies in a single layer
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum install -y nodejs wget \
     && amazon-linux-extras install epel -y \
@@ -60,12 +60,12 @@ RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum install -y ./google-chrome-stable_current_x86_64.rpm \
     && rm google-chrome-stable_current_x86_64.rpm \
     && yum clean all \
-    && rm -rf /var/cache/yum \
-    # Setup system directories in the same layer
-    && mkdir -p /var/run/dbus /var/run/upower \
+    && rm -rf /var/cache/yum
+
+# Setup system directories and user in a single layer
+RUN mkdir -p /var/run/dbus /var/run/upower \
     && dbus-uuidgen > /var/lib/dbus/machine-id \
     && mkdir -p /etc/upower \
-    # Add user and setup directories
     && groupadd -r pptruser \
     && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/{Downloads,.local/share/applications,.cache/{fontconfig,puppeteer},.config} \
@@ -85,7 +85,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     HOME=/home/pptruser \
     NODE_ENV=production \
     PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer \
-    NODE_OPTIONS="--max-old-space-size=384"
+    NODE_OPTIONS="--max-old-space-size=512"
 
 # Set final permissions
 RUN chown -R pptruser:pptruser /app /var/run/{dbus,upower} /etc/upower \
