@@ -97,9 +97,9 @@ jobs:
                 - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
                 - CHROME_PATH=/usr/bin/google-chrome
                 - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new
+                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new,--disable-software-rasterizer,--disable-dbus
                 - NO_SANDBOX=true
-                - DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+                - DBUS_SESSION_BUS_ADDRESS=/dev/null
                 - DISPLAY=:99
                 - HOME=/tmp
                 - XDG_RUNTIME_DIR=/tmp
@@ -113,7 +113,6 @@ jobs:
                 - SYS_ADMIN
               volumes:
                 - ./data:/app/data
-                - /var/run/dbus:/var/run/dbus
               tmpfs:
                 - /tmp:exec,mode=1777,size=2G
                 - /run:exec,mode=1777
@@ -121,7 +120,7 @@ jobs:
                 - /dev/shm:mode=1777,size=2G
               ipc: host
               healthcheck:
-                test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost/api/health"]
+                test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost:8000/api/health"]
                 interval: 10s
                 timeout: 5s
                 retries: 3
