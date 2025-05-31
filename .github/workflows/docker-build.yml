@@ -267,15 +267,17 @@ jobs:
                 container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}" 2>/dev/null) || true
                 echo "Final container status: ${container_status}"
                 
-                # If container is actually healthy but our script failed, don't fail the build
+                # Do a final health check
                 final_health="unknown"
                 final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null) || true
+                echo "Final health check status: ${final_health}"
                 
-                if [ "${final_health}" = "healthy" ]; then
+                if [ "${final_health}" = "healthy" ] || echo "${container_status}" | grep -q "(healthy)"; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
                 else
-                  echo "Container health status: ${final_health}"
+                  echo "Container is not healthy. Status: ${final_health}"
+                  echo "Container status: ${container_status}"
                   docker ps -a
                   docker inspect monkids_backend || true
                   exit 1
@@ -283,16 +285,16 @@ jobs:
               fi
             done
             
-            # Double check the container is really running and healthy before proceeding
-            final_check=$(docker inspect monkids_backend --format='{{.State.Health.Status}}' 2>/dev/null)
-            if [ "${final_check}" != "healthy" ]; then
-              echo "Final health check failed. Status: ${final_check:-Unknown}"
+            # Verify one last time that the container is truly healthy before proceeding
+            echo "Performing final verification..."
+            if ! check_container_health; then
+              echo "Final verification failed - container is not healthy"
               docker ps -a
-              docker inspect monkids_backend || true
+              docker logs monkids_backend || true
               exit 1
             fi
             
-            echo "Backend container is healthy and ready for nginx"
+            echo "Backend container is verified healthy and ready for nginx"
             
             # Only start nginx if backend is healthy
             if [ "$status" = "healthy" ]; then
