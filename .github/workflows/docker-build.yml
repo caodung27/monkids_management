@@ -102,6 +102,7 @@ jobs:
                 - DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
                 - DISPLAY=:99
                 - HOME=/tmp
+                - XDG_RUNTIME_DIR=/tmp
                 - XDG_CACHE_HOME=/tmp/.cache
                 - XDG_CONFIG_HOME=/tmp/.config
                 - XDG_DATA_HOME=/tmp/.local/share

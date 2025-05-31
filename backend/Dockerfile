@@ -65,7 +65,11 @@ RUN apt-get update \
     && chmod -R 755 /usr/share/fonts/local \
     && chmod -R 755 /var/cache/fontconfig \
     && chmod -R 777 /var/run/dbus \
-    && dbus-uuidgen > /etc/machine-id
+    && dbus-uuidgen > /etc/machine-id \
+    && mkdir -p /var/run/dbus \
+    && chown -R root:root /var/run/dbus \
+    && chmod -R 777 /var/run/dbus \
+    && dbus-daemon --system --fork --nopidfile
 
 # Copy only necessary files from builder
 COPY --from=builder /app/dist ./dist
@@ -77,6 +81,7 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     XDG_CACHE_HOME=/tmp/.cache \
     XDG_CONFIG_HOME=/tmp/.config \
     XDG_DATA_HOME=/tmp/.local/share \
+    XDG_RUNTIME_DIR=/tmp \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome \
     PUPPETEER_NO_SANDBOX=true \
@@ -95,5 +100,17 @@ RUN mkdir -p /var/run/dbus \
 # Expose port
 EXPOSE 8000
 
+# Create startup script
+RUN echo '#!/bin/bash\n\
+dbus-daemon --system --nopidfile --nofork &\n\
+DBUS_PID=$!\n\
+Xvfb :99 -screen 0 1024x768x16 &\n\
+XVFB_PID=$!\n\
+google-chrome --version\n\
+npm run start:prod\n\
+kill $DBUS_PID\n\
+kill $XVFB_PID' > /app/start.sh \
+    && chmod +x /app/start.sh
+
 # Start application with system services and Xvfb
-CMD ["sh", "-c", "dbus-daemon --system & Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]
+CMD ["/app/start.sh"]
