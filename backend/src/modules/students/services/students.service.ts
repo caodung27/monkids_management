@@ -11,6 +11,7 @@ import { In } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as archiver from 'archiver';
+import * as os from 'os';
 
 @Injectable()
 export class StudentsService {
@@ -145,12 +146,15 @@ export class StudentsService {
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
+    const exportId = uuidv4();
 
-    const tempDir = path.join(__dirname, '..\/..\/..\/tmp');
+    // Use os.tmpdir() for temporary directory
+    const tempDir = path.join(os.tmpdir(), `monkids_export_${exportId}`);
     const exportBaseDir = path.join(tempDir, `MONKIDS_Thang${currentMonth}_${currentYear}`);
+    const zipFilePath = path.join(os.tmpdir(), `MONKIDS_Student_Receipts_${exportId}.zip`);
 
     try {
-      // Create temp directory if it doesn't exist
+      // Create temp directory
       await fs.promises.mkdir(tempDir, { recursive: true });
       await fs.promises.mkdir(exportBaseDir, { recursive: true });
 
@@ -171,16 +175,19 @@ export class StudentsService {
       }
 
       // Create zip file
-      const zipFileName = `MONKIDS_Thang${currentMonth}_${currentYear}.zip`;
-      const zipFilePath = path.join(tempDir, zipFileName);
       const output = fs.createWriteStream(zipFilePath);
       const archive = archiver('zip', { zlib: { level: 9 } });
 
       return new Promise((resolve, reject) => {
         output.on('close', async () => {
           try {
-            // Clean up the export directory after creating zip
-            await fs.promises.rm(exportBaseDir, { recursive: true, force: true });
+            // Clean up all temporary files and directories
+            await Promise.all([
+              fs.promises.rm(tempDir, { recursive: true, force: true }),
+              fs.promises.rm(exportBaseDir, { recursive: true, force: true })
+            ]).catch(err => {
+              console.error('Error cleaning up temp directories:', err);
+            });
             resolve(zipFilePath);
           } catch (cleanupError) {
             console.error('Error cleaning up export directory:', cleanupError);
@@ -198,9 +205,13 @@ export class StudentsService {
         archive.finalize();
       });
     } catch (error) {
-      // Clean up on error
+      // Clean up all temporary files and directories in case of error
       try {
-        await fs.promises.rm(exportBaseDir, { recursive: true, force: true });
+        await Promise.all([
+          fs.promises.rm(tempDir, { recursive: true, force: true }),
+          fs.promises.rm(exportBaseDir, { recursive: true, force: true }),
+          fs.promises.rm(zipFilePath, { force: true })
+        ]);
       } catch (cleanupError) {
         console.error('Error cleaning up after failed export:', cleanupError);
       }

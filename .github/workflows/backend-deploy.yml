@@ -1,0 +1,138 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Navigate to project directory
+            cd /path/to/your/project/backend
+
+            # Create backup directory if not exists
+            mkdir -p ~/backups
+
+            # Backup current state
+            timestamp=$(date +%Y%m%d_%H%M%S)
+            backup_dir=~/backups/backup_${timestamp}
+            mkdir -p $backup_dir
+
+            # Backup current docker state and configs
+            docker-compose ps > $backup_dir/containers_state.txt
+            docker-compose config > $backup_dir/docker-compose_config.yml
+            cp docker-compose.yml $backup_dir/
+            cp .env $backup_dir/ || true
+
+            # Store current git commit hash
+            current_commit=$(git rev-parse HEAD)
+            echo $current_commit > $backup_dir/git_commit.txt
+
+            # Pull latest changes
+            git pull origin main
+
+            # Stop and remove containers
+            docker-compose down
+            docker-compose rm -f
+
+            # Clean up Docker system
+            docker system prune -f
+            docker system prune -af --volumes
+
+            # Build and start containers with error handling
+            if ! docker-compose build --no-cache; then
+              echo "Build failed, rolling back..."
+              git reset --hard $current_commit
+              docker-compose up -d
+              exit 1
+            fi
+
+            if ! docker-compose up -d; then
+              echo "Deployment failed, rolling back..."
+              git reset --hard $current_commit
+              docker-compose up -d
+              exit 1
+            fi
+
+            # Health check using Docker healthcheck
+            echo "Starting health check..."
+            MAX_RETRIES=30
+            RETRY_INTERVAL=10
+            RETRY_COUNT=0
+            
+            until [ "$(docker inspect --format='{{.State.Health.Status}}' $(docker-compose ps -q backend))" = "healthy" ] || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
+              echo "Waiting for service to be healthy... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
+              sleep $RETRY_INTERVAL
+              RETRY_COUNT=$((RETRY_COUNT+1))
+
+              # Check if container is running
+              if [ "$(docker inspect --format='{{.State.Status}}' $(docker-compose ps -q backend))" != "running" ]; then
+                echo "Container is not running! Checking logs:"
+                docker-compose logs backend --tail=50
+                echo "Rolling back due to container failure..."
+                git reset --hard $current_commit
+                docker-compose up -d
+                exit 1
+              fi
+            done
+
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+              echo "Service failed to become healthy. Rolling back to previous version..."
+              echo "Last health check status: $(docker inspect --format='{{.State.Health.Status}}' $(docker-compose ps -q backend))"
+              echo "Container logs:"
+              docker-compose logs backend --tail=100
+              
+              git reset --hard $current_commit
+              docker-compose up -d
+              
+              # Cleanup failed deployment backup
+              rm -rf $backup_dir
+              
+              # Send deployment failure notification
+              echo "Deployment failed - Service health check timeout"
+              exit 1
+            fi
+
+            # Check Nginx status
+            if ! curl -f http://localhost/api/health; then
+              echo "Nginx proxy check failed. Rolling back..."
+              git reset --hard $current_commit
+              docker-compose up -d
+              exit 1
+            fi
+
+            # Verify deployment
+            echo "Container status:"
+            docker-compose ps
+
+            # Print recent logs
+            echo "Recent container logs:"
+            docker-compose logs --tail=50
+
+            # Cleanup old backups (keep last 5)
+            cd ~/backups
+            ls -t | tail -n +6 | xargs rm -rf
+
+            echo "Deployment completed successfully!" 
