@@ -1,41 +1,17 @@
-name: Backend CI/CD Workflow
+name: Backend Deployment
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend-deploy.yml'
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+    branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push backend
-        uses: docker/build-push-action@v4
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:latest,${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:buildcache,mode=max
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
     steps:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@master
@@ -43,9 +19,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: |
-            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            DOCKERHUB_TOKEN=${{ secrets.DOCKERHUB_TOKEN }}
+          envs: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
           script: |
             set -e  # Exit on any error
             
@@ -55,38 +29,28 @@ jobs:
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             BACKUP_DIR=${BACKUP_BASE_DIR}/backup_${TIMESTAMP}
             
-            # Create backup directory structure
-            mkdir -p $BACKUP_DIR/{env,data,docker}
+            # Create backup directory
+            mkdir -p $BACKUP_DIR/{env,data}
             
-            # Backup existing configuration and data
+            # Backup existing data
             echo "Creating backup..."
             if [ -d "$WORKSPACE_DIR" ]; then
               # Backup environment files
               find $WORKSPACE_DIR -name '.env*' -exec cp --parents {} $BACKUP_DIR/env/ \;
               
-              # Backup docker volumes (if any)
+              # Backup data directory if exists
               if [ -d "$WORKSPACE_DIR/backend/data" ]; then
                 cp -r $WORKSPACE_DIR/backend/data $BACKUP_DIR/data/
               fi
-              
-              # Export running containers config
-              cd $WORKSPACE_DIR/backend
-              docker-compose config > $BACKUP_DIR/docker/docker-compose.yml 2>/dev/null || true
             fi
             
-            # Setup or update workspace
-            if [ ! -d "$WORKSPACE_DIR" ]; then
-              git clone --depth 1 --single-branch --branch main https://github.com/caodung27/monkids_management.git $WORKSPACE_DIR
+            # Create workspace if not exists
+            if [ ! -d "$WORKSPACE_DIR/backend" ]; then
+              mkdir -p $WORKSPACE_DIR/backend
             fi
-            cd $WORKSPACE_DIR
+            cd $WORKSPACE_DIR/backend
             
-            # Optimize git operations
-            git fetch --prune --quiet
-            git reset --hard origin/main
-            
-            cd backend
-            
-            # Restore .env from backup if it doesn't exist
+            # Restore or create .env
             if [ ! -f ".env" ] && [ -f "$BACKUP_DIR/env/backend/.env" ]; then
               echo "Restoring .env from backup..."
               cp "$BACKUP_DIR/env/backend/.env" .
@@ -98,28 +62,19 @@ jobs:
               exit 1
             fi
             
-            # Add Docker Hub credentials to .env if not present
-            if ! grep -q "DOCKERHUB_USERNAME" .env; then
-              echo "Adding Docker Hub credentials to .env..."
-              echo "DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}" >> .env
-            fi
-            
-            # Login to Docker Hub
-            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-            
-            # Stop services gracefully
+            # Stop existing containers
             echo "Stopping services..."
             docker-compose down --remove-orphans --timeout 30
             
-            # Pull latest images
-            echo "Pulling latest images..."
-            docker pull ${DOCKERHUB_USERNAME}/monkids-backend:latest
+            # Pull latest image
+            echo "Pulling latest image..."
+            docker pull ${DOCKER_USERNAME}/monkids-backend:latest
             
-            # Start services with health checks
+            # Start services
             echo "Starting services..."
             docker-compose up -d
             
-            # Enhanced health check
+            # Health check
             echo "Performing health checks..."
             MAX_RETRIES=5
             RETRY_INTERVAL=20
@@ -151,7 +106,7 @@ jobs:
               return 0
             }
             
-            until check_service_health backend && check_service_health nginx || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
+            until check_service_health backend || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
               echo "Waiting for services... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
               docker-compose logs --tail=20
               sleep $RETRY_INTERVAL
@@ -163,6 +118,7 @@ jobs:
               docker-compose logs --tail=100
               docker-compose down --volumes
               if [ -d "$BACKUP_DIR" ]; then
+                # Restore from backup
                 cp $BACKUP_DIR/env/backend/.env . 2>/dev/null || true
                 if [ -d "$BACKUP_DIR/data" ]; then
                   cp -r $BACKUP_DIR/data/* ./data/
@@ -172,15 +128,13 @@ jobs:
               exit 1
             fi
             
-            # Cleanup old backups (keep last 5)
+            # Cleanup
+            echo "Cleaning up..."
+            # Keep last 5 backups
             cd $BACKUP_BASE_DIR
             ls -t | tail -n +6 | xargs rm -rf 2>/dev/null || true
             
             # Cleanup old images
             docker system prune -f --filter "until=24h"
-            
-            # Print resource usage
-            echo "Current resource usage:"
-            docker stats --no-stream
             
             echo "Deployment completed successfully!" 

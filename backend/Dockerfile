@@ -15,7 +15,7 @@ COPY package*.json ./
 # Install dependencies with verbose logging and legacy peer deps
 RUN set -x \
     && npm install --verbose --legacy-peer-deps \
-    && npm install -g @nestjs/cli@10.0.0 \
+    && npm install -g @nestjs/cli@9.5.0 \
     && npm cache clean --force \
     && npm list -g --depth=0
 
