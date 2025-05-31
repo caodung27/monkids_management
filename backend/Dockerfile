@@ -45,7 +45,11 @@ RUN mkdir -p /var/run/dbus /var/run/upower \
 # Add user for running Chrome
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/Downloads \
-    && chown -R pptruser:pptruser /home/pptruser
+    && mkdir -p /home/pptruser/.local/share/applications \
+    && mkdir -p /home/pptruser/.cache/fontconfig \
+    && mkdir -p /home/pptruser/.config \
+    && chown -R pptruser:pptruser /home/pptruser \
+    && chmod -R 755 /home/pptruser
 
 # Copy package files
 COPY package*.json ./
@@ -64,6 +68,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 ENV PUPPETEER_NO_SANDBOX=true
 ENV DISPLAY=:99
+ENV HOME=/home/pptruser
 
 # Create cache directory and set permissions
 RUN mkdir -p /home/pptruser/.cache/puppeteer \
@@ -71,7 +76,10 @@ RUN mkdir -p /home/pptruser/.cache/puppeteer \
     && chown -R pptruser:pptruser /app \
     && chown -R pptruser:pptruser /var/run/dbus \
     && chown -R pptruser:pptruser /var/run/upower \
-    && chown -R pptruser:pptruser /etc/upower
+    && chown -R pptruser:pptruser /etc/upower \
+    && chmod -R 755 /var/run/dbus \
+    && chmod -R 755 /var/run/upower \
+    && chmod -R 755 /etc/upower
 
 # Switch to pptruser
 USER pptruser
