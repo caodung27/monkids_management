@@ -2,8 +2,8 @@ FROM amazonlinux:2
 
 WORKDIR /app
 
-# Install Node.js 18
-RUN curl -sL https://rpm.nodesource.com/setup_18.x | bash - \
+# Install Node.js 16
+RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum install -y nodejs
 
 # Install Chrome dependencies and system utilities
