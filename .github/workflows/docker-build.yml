@@ -223,8 +223,8 @@ jobs:
               fi
               
               # Get health status with proper error handling
-              local health_status
-              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
+              health_status="unknown"
+              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null) || true
               
               echo "Container health status: ${health_status}"
               
@@ -263,11 +263,14 @@ jobs:
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
                 # Get final container status
-                container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}" 2>/dev/null || echo "unknown")
+                container_status="unknown"
+                container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}" 2>/dev/null) || true
                 echo "Final container status: ${container_status}"
                 
                 # If container is actually healthy but our script failed, don't fail the build
-                final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
+                final_health="unknown"
+                final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null) || true
+                
                 if [ "${final_health}" = "healthy" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
