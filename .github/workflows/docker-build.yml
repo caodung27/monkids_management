@@ -76,6 +76,9 @@ jobs:
           mkdir -p deploy
           cd deploy
           
+          # Copy .env file from backend
+          cp ../backend/.env .
+          
           # Create docker-compose.yml
           cat > docker-compose.yml << 'EOF'
           version: '3.8'
@@ -162,7 +165,7 @@ jobs:
           
           echo "Copying files to EC2..."
           ssh ec2 "mkdir -p ~/monkid_management"
-          scp -r * ec2:~/monkid_management/
+          scp -r * .env ec2:~/monkid_management/
           
           echo "Starting deployment on EC2..."
           ssh ec2 "
