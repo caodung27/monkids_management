@@ -3,14 +3,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student } from '../students/entities/student.entity';
 import { Teacher } from '../teachers/entities/teacher.entity';
-import * as fs from 'fs';
-import * as path from 'path';
 import { format } from 'date-fns';
 import * as puppeteer from 'puppeteer';
 import { renderStudentReceiptHTML } from './templates/student-receipt.template';
 import { renderTeacherSalaryHTML } from './templates/teacher-salary.template';
 import { In } from 'typeorm';
-import { ScreenshotOptions } from 'puppeteer';
+import * as archiver from 'archiver';
+import { PassThrough } from 'stream';
 
 @Injectable()
 export class ExportService {
@@ -24,7 +23,6 @@ export class ExportService {
     @InjectRepository(Teacher)
     private readonly teacherRepository: Repository<Teacher>,
   ) {
-    // Khởi tạo browser khi service được tạo
     this.initBrowser();
   }
 
@@ -33,7 +31,7 @@ export class ExportService {
     
     const options: any = {
       headless: true,
-      timeout: 30000,  // 30 seconds timeout
+      timeout: 30000,
     };
 
     if (isProduction) {
@@ -47,14 +45,14 @@ export class ExportService {
         '--disable-extensions',
         '--single-process',
         '--no-zygote',
-        '--window-size=1920,1080',  // Set window size explicitly
-        '--font-render-hinting=none' // Improve font rendering
+        '--window-size=1920,1080',
+        '--font-render-hinting=none'
       ];
       options.env = {
         DISPLAY: ':99'
       };
-      options.pipe = true;  // Use pipe instead of WebSocket
-      options.dumpio = true;  // Print browser logs to stdout/stderr
+      options.pipe = true;
+      options.dumpio = true;
     }
 
     try {
@@ -67,13 +65,12 @@ export class ExportService {
   }
 
   async onModuleDestroy() {
-    // Đóng browser khi service bị hủy
     if (this.browser) {
       await this.browser.close();
     }
   }
 
-  private async generateImage(html: string, outputPath: string): Promise<void> {
+  private async generateImage(html: string): Promise<Buffer> {
     if (!this.browser || !this.browser.isConnected()) {
       console.log('Browser not connected, reinitializing...');
       await this.initBrowser();
@@ -87,36 +84,23 @@ export class ExportService {
         deviceScaleFactor: 2,
       });
 
-      await page.setDefaultNavigationTimeout(30000);  // 30 seconds navigation timeout
-      await page.setDefaultTimeout(30000);  // 30 seconds timeout for other operations
-
-      console.log('Setting page content...');
       await page.setContent(html, {
         waitUntil: ['domcontentloaded', 'networkidle0'],
         timeout: 30000
       });
 
-      console.log('Waiting for QR code...');
-      await page.waitForSelector('#qr-img', { timeout: 5000 }).catch((err) => {
-        console.warn('QR code element not found:', err.message);
-      });
-
-      console.log('Taking screenshot...');
       const element = await page.$('#receipt-root');
-      if (element) {
-        const imagePath = outputPath.endsWith('.png') ? outputPath : `${outputPath}.png`;
-        await element.screenshot({
-          path: imagePath as `${string}.png`,
-          type: 'png',
-          omitBackground: true
-        });
-        console.log('Screenshot saved:', imagePath);
-      } else {
+      if (!element) {
         throw new Error('Receipt root element not found');
       }
-    } catch (error) {
-      console.error('Error generating image:', error);
-      throw error;
+
+      const imageBuffer = await element.screenshot({
+        type: 'png',
+        omitBackground: true,
+        encoding: 'binary'
+      });
+
+      return Buffer.from(imageBuffer);
     } finally {
       await page.close().catch(err => console.error('Error closing page:', err));
     }
@@ -126,145 +110,76 @@ export class ExportService {
     const now = new Date();
     const currentMonth = format(now, 'MM');
     const currentYear = format(now, 'yyyy');
-    const baseDir = path.join(process.cwd(), 'public', 'exports', `MONKIDS_T${currentMonth}_${currentYear}`);
-    
-    try {
-      await fs.promises.mkdir(baseDir, { recursive: true });
 
+    // Create a PassThrough stream for the ZIP file
+    const zipStream = new PassThrough();
+    const archive = archiver('zip', {
+      zlib: { level: 9 }
+    });
+
+    // Pipe archive data to the zip stream
+    archive.pipe(zipStream);
+
+    try {
       if (type === 'student') {
-        await this.exportStudentReceipts(ids, baseDir, currentMonth, currentYear);
+        const students = await this.studentRepository.findByIds(ids);
+        if (!students || students.length === 0) {
+          throw new NotFoundException('No students found with the provided IDs');
+        }
+
+        // Process students in batches
+        const batches: Student[][] = [];
+        for (let i = 0; i < students.length; i += this.BATCH_SIZE) {
+          batches.push(students.slice(i, i + this.BATCH_SIZE));
+        }
+
+        for (const batch of batches) {
+          await Promise.all(batch.map(async (student) => {
+            const html = renderStudentReceiptHTML(student, parseInt(currentMonth), parseInt(currentYear));
+            const imageBuffer = await this.generateImage(html);
+            const classroom = student.classroom || 'Other';
+            const fileName = `${classroom}/${this.sanitizeFileName(student.name || 'Unknown')}_${student.student_id}.png`;
+            archive.append(imageBuffer, { name: fileName });
+          }));
+        }
       } else {
-        await this.exportTeacherSalarySlips(ids, baseDir, currentMonth, currentYear);
+        const teachers = await this.teacherRepository.find({
+          where: { id: In(ids) }
+        });
+        if (!teachers || teachers.length === 0) {
+          throw new NotFoundException('No teachers found with the provided IDs');
+        }
+
+        // Process teachers in batches
+        const batches: Teacher[][] = [];
+        for (let i = 0; i < teachers.length; i += this.BATCH_SIZE) {
+          batches.push(teachers.slice(i, i + this.BATCH_SIZE));
+        }
+
+        for (const batch of batches) {
+          await Promise.all(batch.map(async (teacher) => {
+            const html = renderTeacherSalaryHTML(teacher, parseInt(currentMonth), parseInt(currentYear));
+            const imageBuffer = await this.generateImage(html);
+            const fileName = `GV_Thang${currentMonth}/${this.sanitizeFileName(teacher.name || 'Unknown')}_${teacher.teacher_no}.png`;
+            archive.append(imageBuffer, { name: fileName });
+          }));
+        }
       }
 
-      const zipFileName = `MONKIDS_T${currentMonth}_${currentYear}.zip`;
-      const zipFilePath = path.join(process.cwd(), 'public', 'exports', zipFileName);
-      await this.createZipFile(baseDir, zipFilePath);
-
-      await fs.promises.rm(baseDir, { recursive: true, force: true });
+      // Finalize the archive
+      await archive.finalize();
 
       return {
         success: true,
-        zipPath: zipFilePath,
-        message: 'Export completed successfully',
+        stream: zipStream,
+        fileName: `MONKIDS_T${currentMonth}_${currentYear}.zip`
       };
     } catch (error) {
-      try {
-        await fs.promises.rm(baseDir, { recursive: true, force: true });
-      } catch (cleanupError) {
-        console.error('Error cleaning up after failed export:', cleanupError);
-      }
+      // If there's an error, destroy the streams
+      archive.destroy();
+      zipStream.destroy();
       throw error;
     }
-  }
-
-  private async processBatch(
-    students: Student[], 
-    baseDir: string, 
-    currentMonth: string, 
-    currentYear: string
-  ): Promise<void> {
-    await Promise.all(students.map(async (student) => {
-      const classroom = student.classroom || 'Other';
-      const classroomDir = path.join(baseDir, classroom);
-      await fs.promises.mkdir(classroomDir, { recursive: true });
-
-      const html = renderStudentReceiptHTML(student, parseInt(currentMonth), parseInt(currentYear));
-      const fileName = `${student.name || 'Unknown'}_${student.student_id}.png`;
-      const filePath = path.join(classroomDir, this.sanitizeFileName(fileName));
-      await this.generateImage(html, filePath);
-    }));
-  }
-
-  private async exportStudentReceipts(ids: string[], baseDir: string, currentMonth: string, currentYear: string) {
-    const students = await this.studentRepository.findByIds(ids);
-    if (!students || students.length === 0) {
-      throw new NotFoundException('No students found with the provided IDs');
-    }
-
-    const batches: Student[][] = [];
-    for (let i = 0; i < students.length; i += this.BATCH_SIZE) {
-      batches.push(students.slice(i, i + this.BATCH_SIZE));
-    }
-
-    for (let i = 0; i < batches.length; i += this.MAX_CONCURRENT) {
-      const currentBatches = batches.slice(i, i + this.MAX_CONCURRENT);
-      await Promise.all(
-        currentBatches.map(batch => 
-          this.processBatch(batch, baseDir, currentMonth, currentYear)
-        )
-      );
-    }
-  }
-
-  private async exportTeacherSalarySlips(ids: string[], baseDir: string, currentMonth: string, currentYear: string) {
-    const teachers = await this.teacherRepository.find({
-      where: {
-        id: In(ids)
-      }
-    });
-    if (!teachers || teachers.length === 0) {
-      throw new NotFoundException('No teachers found with the provided IDs');
-    }
-
-    const teacherDir = path.join(baseDir, `GV_Thang${currentMonth}`);
-    await fs.promises.mkdir(teacherDir, { recursive: true });
-
-    const batches: Teacher[][] = [];
-    for (let i = 0; i < teachers.length; i += this.BATCH_SIZE) {
-      batches.push(teachers.slice(i, i + this.BATCH_SIZE));
-    }
-
-    for (let i = 0; i < batches.length; i += this.MAX_CONCURRENT) {
-      const currentBatches = batches.slice(i, i + this.MAX_CONCURRENT);
-      await Promise.all(
-        currentBatches.map(async (batch) => {
-          await Promise.all(batch.map(async (teacher) => {
-            const html = renderTeacherSalaryHTML(teacher, parseInt(currentMonth), parseInt(currentYear));
-            const fileName = `${teacher.name || 'Unknown'}_${teacher.teacher_no}.png`;
-            const filePath = path.join(teacherDir, this.sanitizeFileName(fileName));
-            await this.generateImage(html, filePath);
-          }));
-        })
-      );
-    }
-  }
-
-  private async createZipFile(sourceDir: string, zipPath: string): Promise<void> {
-    const archiver = require('archiver');
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', {
-      zlib: { level: 9 },
-      forceLocalTime: true
-    });
-
-    return new Promise((resolve, reject) => {
-      output.on('close', () => {
-        console.log('Archive has been finalized and the output file descriptor has closed.');
-        resolve();
-      });
-
-      output.on('end', () => {
-        console.log('Data has been drained');
-      });
-
-      archive.on('warning', (err) => {
-        if (err.code === 'ENOENT') {
-          console.warn('Archive warning:', err);
-        } else {
-          reject(err);
-        }
-      });
-
-      archive.on('error', (err) => {
-        console.error('Archive error:', err);
-        reject(err);
-      });
-
-      archive.pipe(output);
-      archive.directory(sourceDir, false);
-      archive.finalize();
-    });
   }
 
   private sanitizeFileName(fileName: string): string {

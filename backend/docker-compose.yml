@@ -45,7 +45,6 @@ services:
       retries: 2
       start_period: 20s
     volumes:
-      - ./public:/app/public
       - /tmp/.X11-unix:/tmp/.X11-unix
     deploy:
       resources:

@@ -73,7 +73,6 @@ ENV HOME=/home/pptruser
 
 # Create necessary directories and set permissions
 RUN mkdir -p /home/pptruser/.cache/puppeteer \
-    && mkdir -p /app/public/exports \
     && chown -R pptruser:pptruser /home/pptruser/.cache \
     && chown -R pptruser:pptruser /app \
     && chown -R pptruser:pptruser /var/run/dbus \
@@ -81,8 +80,7 @@ RUN mkdir -p /home/pptruser/.cache/puppeteer \
     && chown -R pptruser:pptruser /etc/upower \
     && chmod -R 755 /var/run/dbus \
     && chmod -R 755 /var/run/upower \
-    && chmod -R 755 /etc/upower \
-    && chmod -R 777 /app/public/exports
+    && chmod -R 755 /etc/upower
 
 # Switch to pptruser
 USER pptruser
