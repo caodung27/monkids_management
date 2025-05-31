@@ -46,13 +46,17 @@ jobs:
             
             # Stop and cleanup in parallel
             echo "Stopping services and cleaning up..."
-            docker-compose down --remove-orphans &
-            docker system prune -af --volumes &
-            wait
+            docker-compose down --remove-orphans
+            docker system prune -af --volumes
+            
+            # Clear Docker build cache
+            docker builder prune -af
             
             # Build with optimizations
             echo "Building services..."
-            DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build --parallel
+            DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build \
+              --build-arg BUILDKIT_INLINE_CACHE=1 \
+              --parallel
             
             # Start services
             echo "Starting services..."

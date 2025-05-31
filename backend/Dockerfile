@@ -1,4 +1,4 @@
-FROM amazonlinux:2
+FROM amazonlinux:2 as builder
 
 WORKDIR /app
 
@@ -8,8 +8,28 @@ RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum clean all \
     && rm -rf /var/cache/yum
 
-# Install Chrome dependencies and system utilities
-RUN yum install -y wget tar xz \
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production --legacy-peer-deps \
+    && npm cache clean --force
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN npm run build \
+    && npm prune --production
+
+# Second stage
+FROM amazonlinux:2
+
+WORKDIR /app
+
+# Install Node.js and Chrome dependencies
+RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
+    && yum install -y nodejs wget \
     && amazon-linux-extras install epel -y \
     && yum install -y \
     dbus dbus-x11 \
@@ -33,11 +53,7 @@ RUN yum install -y wget tar xz \
     nss \
     cups-libs \
     GConf2 \
-    && yum clean all \
-    && rm -rf /var/cache/yum
-
-# Install Chrome
-RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
+    && wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
     && yum install -y ./google-chrome-stable_current_x86_64.rpm \
     && rm google-chrome-stable_current_x86_64.rpm \
     && yum clean all \
@@ -57,20 +73,10 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && chown -R pptruser:pptruser /home/pptruser \
     && chmod -R 755 /home/pptruser
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies with clean npm cache
-RUN npm install --legacy-peer-deps --production \
-    && npm cache clean --force
-
-# Copy source code
-COPY . .
-
-# Build application
-RUN npm run build \
-    && npm prune --production \
-    && rm -rf src/ test/ docs/ *.md
+# Copy from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
 # Add puppeteer configuration
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
