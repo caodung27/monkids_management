@@ -97,7 +97,9 @@ jobs:
                 - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
                 - CHROME_PATH=/usr/bin/google-chrome
                 - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu
+                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless
+                - NO_SANDBOX=true
+                - DBUS_SESSION_BUS_ADDRESS=/dev/null
               security_opt:
                 - seccomp=unconfined
               cap_add:
@@ -105,10 +107,10 @@ jobs:
               volumes:
                 - ./data:/app/data
               tmpfs:
-                - /tmp
-                - /run
-                - /run/lock
-                - /dev/shm
+                - /tmp:exec,mode=1777
+                - /run:exec,mode=1777
+                - /run/lock:exec,mode=1777
+                - /dev/shm:mode=1777
               ipc: host
               deploy:
                 resources:
@@ -222,12 +224,19 @@ jobs:
               echo "Health check attempt $attempts/$max_attempts"
               sleep 10
               
-              status=$(docker inspect monkids_backend --format='{{.State.Health.Status}}' 2>/dev/null || echo "error")
+              status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
               echo "Container health status: $status"
               
               if [ "$status" = "healthy" ]; then
                 echo "Backend is healthy!"
                 break
+              fi
+              
+              if [ "$status" = "error" ]; then
+                echo "Error getting container status"
+                docker ps -a
+                docker logs monkids_backend || true
+                continue
               fi
               
               echo "Recent backend logs:"
