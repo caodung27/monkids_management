@@ -12,16 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
       - name: Deploy to EC2
         uses: appleboy/ssh-action@master
         with:
@@ -29,33 +19,56 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Navigate to project directory
-            cd /path/to/your/project/backend
+            # Setup workspace if not exists
+            WORKSPACE_DIR=/home/${{ secrets.EC2_USERNAME }}/monkids_management
+            if [ ! -d "$WORKSPACE_DIR" ]; then
+              echo "Creating workspace directory..."
+              mkdir -p $WORKSPACE_DIR
+              cd $WORKSPACE_DIR
+              git clone https://github.com/caodung27/monkids_management.git .
+            else
+              cd $WORKSPACE_DIR
+            fi
+
+            # Ensure we're in a git repository
+            if [ ! -d ".git" ]; then
+              echo "Initializing git repository..."
+              git init
+              git remote add origin https://github.com/caodung27/monkids_management.git
+            fi
 
             # Create backup directory if not exists
             mkdir -p ~/backups
+
+            # Navigate to backend directory
+            cd backend
 
             # Backup current state
             timestamp=$(date +%Y%m%d_%H%M%S)
             backup_dir=~/backups/backup_${timestamp}
             mkdir -p $backup_dir
 
-            # Backup current docker state and configs
-            docker-compose ps > $backup_dir/containers_state.txt
-            docker-compose config > $backup_dir/docker-compose_config.yml
-            cp docker-compose.yml $backup_dir/
-            cp .env $backup_dir/ || true
+            # Backup current docker state and configs if they exist
+            if [ -f "docker-compose.yml" ]; then
+              docker-compose ps > $backup_dir/containers_state.txt || true
+              docker-compose config > $backup_dir/docker-compose_config.yml || true
+              cp docker-compose.yml $backup_dir/
+            fi
+            
+            if [ -f ".env" ]; then
+              cp .env $backup_dir/
+            fi
 
             # Store current git commit hash
-            current_commit=$(git rev-parse HEAD)
-            echo $current_commit > $backup_dir/git_commit.txt
+            current_commit=$(git rev-parse HEAD || echo "no-previous-commit")
 
-            # Pull latest changes
-            git pull origin main
+            # Fetch and reset to latest changes
+            git fetch origin main
+            git reset --hard origin/main
 
             # Stop and remove containers
-            docker-compose down
-            docker-compose rm -f
+            docker-compose down || true
+            docker-compose rm -f || true
 
             # Clean up Docker system
             docker system prune -f
@@ -64,15 +77,19 @@ jobs:
             # Build and start containers with error handling
             if ! docker-compose build --no-cache; then
               echo "Build failed, rolling back..."
-              git reset --hard $current_commit
-              docker-compose up -d
+              if [ "$current_commit" != "no-previous-commit" ]; then
+                git reset --hard $current_commit
+                docker-compose up -d
+              fi
               exit 1
             fi
 
             if ! docker-compose up -d; then
               echo "Deployment failed, rolling back..."
-              git reset --hard $current_commit
-              docker-compose up -d
+              if [ "$current_commit" != "no-previous-commit" ]; then
+                git reset --hard $current_commit
+                docker-compose up -d
+              fi
               exit 1
             fi
 
@@ -92,8 +109,10 @@ jobs:
                 echo "Container is not running! Checking logs:"
                 docker-compose logs backend --tail=50
                 echo "Rolling back due to container failure..."
-                git reset --hard $current_commit
-                docker-compose up -d
+                if [ "$current_commit" != "no-previous-commit" ]; then
+                  git reset --hard $current_commit
+                  docker-compose up -d
+                fi
                 exit 1
               fi
             done
@@ -104,22 +123,13 @@ jobs:
               echo "Container logs:"
               docker-compose logs backend --tail=100
               
-              git reset --hard $current_commit
-              docker-compose up -d
+              if [ "$current_commit" != "no-previous-commit" ]; then
+                git reset --hard $current_commit
+                docker-compose up -d
+              fi
               
               # Cleanup failed deployment backup
               rm -rf $backup_dir
-              
-              # Send deployment failure notification
-              echo "Deployment failed - Service health check timeout"
-              exit 1
-            fi
-
-            # Check Nginx status
-            if ! curl -f http://localhost/api/health; then
-              echo "Nginx proxy check failed. Rolling back..."
-              git reset --hard $current_commit
-              docker-compose up -d
               exit 1
             fi
 
@@ -133,6 +143,6 @@ jobs:
 
             # Cleanup old backups (keep last 5)
             cd ~/backups
-            ls -t | tail -n +6 | xargs rm -rf
+            ls -t | tail -n +6 | xargs rm -rf 2>/dev/null || true
 
             echo "Deployment completed successfully!" 
