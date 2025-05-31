@@ -121,17 +121,17 @@ jobs:
                 - /dev/shm:mode=1777,size=2G
               ipc: host
               healthcheck:
-                test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/health || exit 1"]
+                test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/health && grep -q 'Application is running on port: 8000' /proc/1/fd/1"]
                 interval: 10s
                 timeout: 10s
-                retries: 5
+                retries: 3
                 start_period: 30s
               networks:
                 - monkids-network
           
             nginx:
               image: nginx:alpine
-              container_name: nginx
+              container_name: nginx 
               restart: unless-stopped
               ports:
                 - "80:80"
@@ -215,54 +215,49 @@ jobs:
             echo "Initial backend logs:"
             docker logs monkids_backend || true
             
-            # Function to get container health status
-            get_container_health() {
-              docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown"
-            }
-            
             # Function to check if container is running and healthy
             check_container_health() {
               local container_status
               local health_status
+              local container_id
               
-              # Check if container exists and is running
-              if ! docker ps --format '{{.Names}}' | grep -q '^monkids_backend$'; then
-                echo "Container is not running"
+              # Get container ID first
+              container_id=$(docker ps -qf "name=^monkids_backend$" 2>/dev/null)
+              if [ -z "$container_id" ]; then
+                echo "Container not found"
                 docker ps -a
-                docker logs monkids_backend || true
                 return 1
               fi
               
-              # Check if container is actually running and not just created
-              container_status=$(docker ps --format '{{.Status}}' --filter "name=monkids_backend" 2>/dev/null)
-              if [ -z "${container_status}" ]; then
-                echo "Container status check failed"
+              # Get detailed container status
+              container_status=$(docker inspect --format='{{.State.Status}}' "$container_id" 2>/dev/null)
+              if [ "$container_status" != "running" ]; then
+                echo "Container is not running (status: ${container_status:-unknown})"
+                docker logs "$container_id" || true
                 return 1
               fi
               
-              # Get health status
-              health_status=$(get_container_health)
-              echo "Container health status: ${health_status}"
-              
-              # Check if container is running the application
-              if ! docker logs monkids_backend 2>&1 | grep -q "Application is running on port: 8000"; then
-                echo "Application not yet running"
+              # Check application logs for startup message
+              if ! docker logs "$container_id" 2>&1 | grep -q "Application is running on port: 8000"; then
+                echo "Application startup message not found in logs"
+                docker logs "$container_id" --tail 50 || true
                 return 1
               fi
               
-              # Check if health endpoint is responding
-              if ! docker exec monkids_backend wget -q --spider http://localhost:8000/api/health; then
-                echo "Health endpoint not responding"
+              # Test health endpoint
+              if ! docker exec "$container_id" wget -q --spider --timeout=10 http://localhost:8000/api/health; then
+                echo "Health endpoint check failed"
                 return 1
               fi
               
               # If we got here, container is healthy
+              echo "Container is healthy"
               return 0
             }
             
             # Initialize variables
             attempts=0
-            max_attempts=10
+            max_attempts=3
             
             echo "Waiting for backend to be healthy..."
             while [ $attempts -lt $max_attempts ]
@@ -271,39 +266,19 @@ jobs:
               echo "Health check attempt $attempts/$max_attempts"
               
               # Give container more time to initialize
-              sleep 20
+              sleep 15
               
               if check_container_health; then
                 echo "Backend is healthy!"
                 break
               fi
               
-              # Show recent logs for debugging
-              echo "Recent backend logs:"
-              docker logs --tail 50 monkids_backend || true
-              
               # Exit if max attempts reached
-              if [ "$attempts" -eq "$max_attempts" ]; then
+              if [ $attempts -eq $max_attempts ]; then
                 echo "Backend failed to become healthy after $max_attempts attempts"
-                
-                # Get final status
-                health_status=$(get_container_health)
-                container_status=$(docker ps --format '{{.Status}}' --filter "name=monkids_backend" 2>/dev/null)
-                
-                echo "Final health check status: ${health_status:-unknown}"
-                echo "Container status: ${container_status:-unknown}"
-                
-                # One last check for application logs
-                if docker logs monkids_backend 2>&1 | grep -q "Application is running on port: 8000"; then
-                  echo "Application appears to be running despite health check failure"
-                  echo "Proceeding with deployment..."
-                  break
-                else
-                  echo "Container is not healthy and application is not running"
-                  docker ps -a
-                  docker logs monkids_backend || true
-                  exit 1
-                fi
+                docker ps -a
+                docker logs monkids_backend --tail 100 || true
+                exit 1
               fi
             done
             
