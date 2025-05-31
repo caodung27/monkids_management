@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${DOCKER_USERNAME}/monkids-backend:latest
+    image: ${DOCKERHUB_USERNAME}/monkids-backend:latest
     container_name: monkids_backend
     restart: unless-stopped
     ports:
