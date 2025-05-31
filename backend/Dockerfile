@@ -2,9 +2,9 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Install Chrome dependencies
+# Install Chrome dependencies and dbus
 RUN apt-get update \
-    && apt-get install -y wget gnupg \
+    && apt-get install -y wget gnupg dbus dbus-x11 \
     && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list' \
     && apt-get update \
@@ -15,6 +15,10 @@ RUN apt-get update \
     libasound2 libpangocairo-1.0-0 libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
+# Setup dbus
+RUN mkdir -p /var/run/dbus \
+    && dbus-uuidgen > /var/lib/dbus/machine-id
 
 # Add user for running Chrome
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
@@ -42,7 +46,8 @@ ENV DISPLAY=:99
 # Create cache directory and set permissions
 RUN mkdir -p /home/pptruser/.cache/puppeteer \
     && chown -R pptruser:pptruser /home/pptruser/.cache \
-    && chown -R pptruser:pptruser /app
+    && chown -R pptruser:pptruser /app \
+    && chown -R pptruser:pptruser /var/run/dbus
 
 # Switch to pptruser
 USER pptruser
@@ -53,5 +58,5 @@ ENV PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
 # Expose port
 EXPOSE 8000
 
-# Start application with Xvfb
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]
+# Start application with Xvfb and dbus
+CMD ["sh", "-c", "dbus-daemon --system & Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]

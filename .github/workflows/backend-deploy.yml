@@ -57,7 +57,7 @@ jobs:
             
             # Optimized health check
             echo "Starting health check..."
-            MAX_RETRIES=15  # Reduced from 30
+            MAX_RETRIES=5  # Reduced from 15 to 5
             RETRY_INTERVAL=10
             RETRY_COUNT=0
             
