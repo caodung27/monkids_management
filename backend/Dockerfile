@@ -2,37 +2,36 @@ FROM amazonlinux:2 as builder
 
 WORKDIR /app
 
-# Install Node.js 16 and build dependencies
-RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
+# Install Node.js 18 and build dependencies
+RUN curl -fsSL https://rpm.nodesource.com/setup_18.x | bash - \
     && yum install -y nodejs git python3 make gcc-c++ \
     && yum clean all \
     && rm -rf /var/cache/yum
 
-# Update npm to a specific version and clear cache
-RUN npm install -g npm@8.19.4 \
+# Update npm and install NestJS CLI
+RUN npm install -g npm@10.2.4 \
     && npm install -g @nestjs/cli@9.5.0 \
     && npm cache clean --force
 
 # Copy package files
 COPY package*.json ./
 
-# Delete package-lock.json if exists and install dependencies with force
-RUN rm -f package-lock.json \
-    && npm install --verbose --force \
+# Install dependencies with legacy peer deps
+RUN npm install --legacy-peer-deps --no-optional \
     && npm cache clean --force
 
 # Copy source and build
 COPY . .
 RUN npm run build \
-    && npm prune --production
+    && npm prune --production --legacy-peer-deps
 
 # Production stage
 FROM amazonlinux:2
 
 WORKDIR /app
 
-# Install Node.js and Chrome dependencies in a single layer
-RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
+# Install Node.js 18 and Chrome dependencies in a single layer
+RUN curl -fsSL https://rpm.nodesource.com/setup_18.x | bash - \
     && yum install -y nodejs wget \
     && amazon-linux-extras install epel -y \
     && yum install -y \
