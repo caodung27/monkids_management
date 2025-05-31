@@ -224,7 +224,7 @@ jobs:
               
               # Get health status with proper error handling
               health_status="unknown"
-              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null) || true
+              health_status=$(docker inspect monkids_backend --format "{{.State.Health.Status}}" 2>/dev/null) || true
               
               echo "Container health status: ${health_status}"
               
@@ -262,22 +262,21 @@ jobs:
               if [ $attempts -eq $max_attempts ]; then
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
-                # Get final container status
-                container_status="unknown"
-                container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}" 2>/dev/null) || true
-                echo "Final container status: ${container_status}"
-                
                 # Do a final health check
                 final_health="unknown"
-                final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null) || true
+                final_health=$(docker inspect monkids_backend --format "{{.State.Health.Status}}" 2>/dev/null) || true
                 echo "Final health check status: ${final_health}"
                 
-                if [ "${final_health}" = "healthy" ] || docker ps --filter "name=monkids_backend" --format "{{.Status}}" | grep -q "healthy"; then
+                # Get container status without template syntax
+                container_running=$(docker ps --no-trunc | grep monkids_backend | grep -q "healthy" && echo "yes" || echo "no")
+                
+                if [ "${final_health}" = "healthy" ] || [ "${container_running}" = "yes" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
                 else
-                  echo "Container is not healthy. Status: ${final_health}"
-                  echo "Container status: ${container_status}"
+                  echo "Container is not healthy"
+                  echo "Health check status: ${final_health}"
+                  echo "Container running status: ${container_running}"
                   docker ps -a
                   docker inspect monkids_backend || true
                   exit 1
