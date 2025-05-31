@@ -1,13 +1,8 @@
 FROM amazonlinux:2
 
-WORKDIR /app
-
-# Install Node.js 16
+# Install Node.js 16 and system dependencies first
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
-    && yum install -y nodejs
-
-# Install Chrome dependencies and system utilities
-RUN yum install -y wget tar xz \
+    && yum install -y nodejs wget tar xz \
     && amazon-linux-extras install epel -y \
     && yum install -y \
     dbus dbus-x11 \
@@ -37,43 +32,14 @@ RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.
     && yum install -y ./google-chrome-stable_current_x86_64.rpm \
     && rm google-chrome-stable_current_x86_64.rpm
 
-# Setup dbus and system directories
-RUN mkdir -p /var/run/dbus /var/run/upower \
+# Setup system directories and permissions
+RUN mkdir -p /var/run/dbus /var/run/upower /etc/upower \
     && dbus-uuidgen > /var/lib/dbus/machine-id \
-    && mkdir -p /etc/upower
-
-# Add user for running Chrome
-RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
-    && mkdir -p /home/pptruser/Downloads \
-    && mkdir -p /home/pptruser/.local/share/applications \
-    && mkdir -p /home/pptruser/.cache/fontconfig \
-    && mkdir -p /home/pptruser/.config \
+    && groupadd -r pptruser \
+    && useradd -r -g pptruser -G audio,video pptruser \
+    && mkdir -p /home/pptruser/{Downloads,.local/share/applications,.cache/fontconfig,.config,.cache/puppeteer} \
     && chown -R pptruser:pptruser /home/pptruser \
-    && chmod -R 755 /home/pptruser
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install --legacy-peer-deps
-
-# Copy source code
-COPY . .
-
-# Build application
-RUN npm run build
-
-# Add puppeteer configuration
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-ENV PUPPETEER_NO_SANDBOX=true
-ENV DISPLAY=:99
-ENV HOME=/home/pptruser
-
-# Create cache directory and set permissions
-RUN mkdir -p /home/pptruser/.cache/puppeteer \
-    && chown -R pptruser:pptruser /home/pptruser/.cache \
-    && chown -R pptruser:pptruser /app \
+    && chmod -R 755 /home/pptruser \
     && chown -R pptruser:pptruser /var/run/dbus \
     && chown -R pptruser:pptruser /var/run/upower \
     && chown -R pptruser:pptruser /etc/upower \
@@ -81,11 +47,30 @@ RUN mkdir -p /home/pptruser/.cache/puppeteer \
     && chmod -R 755 /var/run/upower \
     && chmod -R 755 /etc/upower
 
+# Set working directory and environment variables
+WORKDIR /app
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome \
+    PUPPETEER_NO_SANDBOX=true \
+    DISPLAY=:99 \
+    HOME=/home/pptruser \
+    PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
+
+# Copy package files first to leverage Docker cache
+COPY package*.json ./
+
+# Install dependencies with clean npm cache and remove unnecessary files
+RUN npm cache clean --force \
+    && npm install --legacy-peer-deps \
+    && npm cache clean --force
+
+# Copy source code and build
+COPY . .
+RUN npm run build \
+    && chown -R pptruser:pptruser /app
+
 # Switch to pptruser
 USER pptruser
-
-# Update Puppeteer cache path for pptruser
-ENV PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
 
 # Expose port
 EXPOSE 8000
