@@ -4,7 +4,9 @@ WORKDIR /app
 
 # Install Node.js 16
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
-    && yum install -y nodejs
+    && yum install -y nodejs \
+    && yum clean all \
+    && rm -rf /var/cache/yum
 
 # Install Chrome dependencies and system utilities
 RUN yum install -y wget tar xz \
@@ -30,12 +32,16 @@ RUN yum install -y wget tar xz \
     alsa-lib \
     nss \
     cups-libs \
-    GConf2
+    GConf2 \
+    && yum clean all \
+    && rm -rf /var/cache/yum
 
 # Install Chrome
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
     && yum install -y ./google-chrome-stable_current_x86_64.rpm \
-    && rm google-chrome-stable_current_x86_64.rpm
+    && rm google-chrome-stable_current_x86_64.rpm \
+    && yum clean all \
+    && rm -rf /var/cache/yum
 
 # Setup dbus and system directories
 RUN mkdir -p /var/run/dbus /var/run/upower \
@@ -55,21 +61,24 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
 COPY package*.json ./
 
 # Install dependencies with clean npm cache
-RUN npm install --legacy-peer-deps \
+RUN npm install --legacy-peer-deps --production \
     && npm cache clean --force
 
 # Copy source code
 COPY . .
 
 # Build application
-RUN npm run build
+RUN npm run build \
+    && npm prune --production \
+    && rm -rf src/ test/ docs/ *.md
 
 # Add puppeteer configuration
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-ENV PUPPETEER_NO_SANDBOX=true
-ENV DISPLAY=:99
-ENV HOME=/home/pptruser
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome \
+    PUPPETEER_NO_SANDBOX=true \
+    DISPLAY=:99 \
+    HOME=/home/pptruser \
+    NODE_ENV=production
 
 # Create necessary directories and set permissions
 RUN mkdir -p /home/pptruser/.cache/puppeteer \

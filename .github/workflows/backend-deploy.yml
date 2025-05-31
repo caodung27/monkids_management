@@ -26,7 +26,7 @@ jobs:
             
             # Quick setup/update
             if [ ! -d "$WORKSPACE_DIR" ]; then
-              git clone --depth 1 https://github.com/caodung27/monkids_management.git $WORKSPACE_DIR
+              git clone --depth 1 --single-branch --branch main https://github.com/caodung27/monkids_management.git $WORKSPACE_DIR
             fi
             cd $WORKSPACE_DIR
             
@@ -44,20 +44,23 @@ jobs:
             
             cd backend
             
-            # Parallel cleanup
+            # Stop and cleanup in parallel
+            echo "Stopping services and cleaning up..."
             docker-compose down --remove-orphans &
             docker system prune -af --volumes &
             wait
             
             # Build with optimizations
-            DOCKER_BUILDKIT=1 docker-compose build --no-cache --parallel
+            echo "Building services..."
+            DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build --parallel
             
             # Start services
+            echo "Starting services..."
             docker-compose up -d
             
             # Optimized health check
             echo "Starting health check..."
-            MAX_RETRIES=5  # Reduced from 15 to 5
+            MAX_RETRIES=3
             RETRY_INTERVAL=10
             RETRY_COUNT=0
             
