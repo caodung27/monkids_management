@@ -10,14 +10,15 @@ RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
 
 # Update npm to a specific version and clear cache
 RUN npm install -g npm@8.19.4 \
+    && npm install -g @nestjs/cli@9.5.0 \
     && npm cache clean --force
 
-# Copy package files first
+# Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --verbose \
-    && npm install -g @nestjs/cli@9.5.0 \
+# Delete package-lock.json if exists and install dependencies with force
+RUN rm -f package-lock.json \
+    && npm install --verbose --force \
     && npm cache clean --force
 
 # Copy source and build
