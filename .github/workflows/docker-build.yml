@@ -121,11 +121,10 @@ jobs:
                 - /dev/shm:mode=1777,size=2G
               ipc: host
               healthcheck:
-                test: ["CMD", "/bin/sh", "-c", "wget -q --spider http://localhost:8000/api/health || exit 1"]
+                test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost/api/health"]
                 interval: 10s
                 timeout: 5s
                 retries: 3
-                start_period: 30s
               networks:
                 - monkids-network
           
@@ -149,7 +148,7 @@ jobs:
               networks:
                 - monkids-network
               healthcheck:
-                test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+                test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost/api/health"]
                 interval: 10s
                 timeout: 5s
                 retries: 3
