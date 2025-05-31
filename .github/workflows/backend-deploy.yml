@@ -16,18 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Log into Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Pull latest Docker image
-        run: |
-          echo "Pulling image: ${{ env.DOCKER_IMAGE }}"
-          docker pull ${{ env.DOCKER_IMAGE }}
-          docker image inspect ${{ env.DOCKER_IMAGE }}
-
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh/
@@ -40,6 +28,17 @@ jobs:
             IdentityFile ~/.ssh/ec2.key
             StrictHostKeyChecking no
           END
+
+      - name: Setup Project Directory
+        run: |
+          ssh ec2 '
+          # Create project directory if it doesn't exist
+          mkdir -p ~/monkid_management
+          mkdir -p ~/monkid_management/data
+          
+          # Set proper permissions
+          chmod 755 ~/monkid_management
+          '
 
       - name: Cleanup EC2 Disk Space
         run: |
@@ -70,21 +69,6 @@ jobs:
             df -h
             exit 1
           }'
-
-      - name: Create backup directory
-        run: ssh ec2 'mkdir -p ~/backups'
-
-      - name: Create backup
-        run: |
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          ssh ec2 'cd ~/monkid_management && \
-          if [ -f docker-compose.yml ]; then \
-            cp docker-compose.yml ~/backups/docker-compose_${TIMESTAMP}.yml && \
-            echo "Backup created at ~/backups/docker-compose_${TIMESTAMP}.yml"; \
-          fi'
-
-      - name: Clean old backups
-        run: ssh ec2 'cd ~/backups && ls -t docker-compose_*.yml | tail -n +6 | xargs rm -f || true'
 
       - name: Update docker-compose.yml
         run: |
@@ -165,7 +149,6 @@ jobs:
               driver: bridge
 
           volumes:
-            backend-cache:
             nginx-cache:
           EOL
           scp docker-compose.yml ec2:~/monkid_management/
@@ -214,16 +197,6 @@ jobs:
           done
           
           if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-            echo "Health check failed after $MAX_RETRIES attempts. Rolling back..."
-            LATEST_BACKUP=$(ssh ec2 'cd ~/backups && ls -t docker-compose_*.yml | head -n1')
-            if [ ! -z "$LATEST_BACKUP" ]; then
-              ssh ec2 "cd ~/monkid_management && \
-              cp ~/backups/$LATEST_BACKUP docker-compose.yml && \
-              docker compose pull && \
-              docker compose up -d"
-              exit 1
-            else
-              echo "No backup found for rollback"
-              exit 1
-            fi
+            echo "Health check failed after $MAX_RETRIES attempts"
+            exit 1
           fi 
