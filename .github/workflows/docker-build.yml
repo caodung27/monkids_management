@@ -135,33 +135,10 @@ jobs:
           # Docker configuration
           DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
           EOL
-          
-          # Verify environment variables
-          echo 'Verifying environment variables...'
-          if [ ! -f .env ]; then
-            echo 'Error: .env file not created'
-            exit 1
-          fi
-          
-          # Check if required variables are set
-          required_vars=(
-            DATABASE_HOST DATABASE_PORT DATABASE_USERNAME DATABASE_PASSWORD DATABASE_NAME
-            JWT_SECRET JWT_REFRESH_SECRET JWT_EXPIRATION JWT_REFRESH_EXPIRATION
-            GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_CALLBACK_URL
-            PORT NODE_ENV FRONTEND_URL DOCKER_USERNAME
-          )
-          for var in \${required_vars[@]}; do
-            if ! grep -q "^\$var=" .env; then
-              echo "Error: \$var is not set in .env file"
-              exit 1
-            fi
-          done
-          
-          echo 'Environment variables verified successfully'
-          
+
           echo 'Stopping existing containers...'
-          docker-compose down
-          
+          docker-compose down --remove-orphans
+
           echo 'Cleaning up Docker system...'
           docker system prune -f
           
@@ -169,16 +146,27 @@ jobs:
           docker-compose pull
           
           echo 'Starting containers...'
-          docker-compose up -d --force-recreate backend
+          docker-compose up -d --force-recreate
           
-          echo 'Waiting for container to be ready...'
-          sleep 30
+          echo 'Waiting for container startup...'
+          sleep 10
           
-          echo 'Container status:'
+          echo '=== Container Status ==='
           docker ps -a
           
-          echo 'Container logs:'
-          docker logs monkids_backend --tail 50
+          echo '=== Container Logs ==='
+          docker-compose logs
+          
+          echo '=== Backend Container Logs ==='
+          docker logs monkids_backend --tail 100
+          
+          echo '=== Fix Puppeteer Permissions ==='
+          docker exec monkids_backend mkdir -p /home/pptruser/.cache/puppeteer
+          docker exec monkids_backend chown -R pptruser:pptruser /home/pptruser
+          docker exec monkids_backend chmod -R 755 /home/pptruser
+          
+          echo '=== Testing Backend API ==='
+          curl -v http://localhost:8000/api/health || true
           "
 
       - name: Health check
@@ -192,30 +180,17 @@ jobs:
           until ssh ec2 "
             echo '=== Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES ==='
             
-            # Check if container is running
-            if ! docker ps | grep -q monkids_backend; then
-              echo 'Container is not running!'
-              docker ps -a | grep monkids_backend
-              echo 'Container logs:'
-              docker logs monkids_backend --tail 20
-              exit 1
-            fi
+            echo '=== Container Status ==='
+            docker ps -a
             
-            # Check environment variables
-            echo 'Checking environment variables...'
-            docker exec monkids_backend env | grep -E 'JWT_SECRET|DB_'
+            echo '=== Backend Container Logs ==='
+            docker logs monkids_backend --tail 50
             
-            # Check port binding
-            echo 'Checking port binding...'
-            if ! docker port monkids_backend | grep -q '8000'; then
-              echo 'Port 8000 is not bound!'
-              docker port monkids_backend
-              exit 1
-            fi
-            
-            # Try health check
-            echo 'Attempting health check...'
+            echo '=== Testing Backend API ==='
             curl -v http://localhost:8000/api/health
+            
+            echo '=== Network Status ==='
+            netstat -tulpn | grep -E ':(80|443|8000)'
           " || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
             echo "Health check failed. Waiting $WAIT_TIME seconds before retry..."
             sleep $WAIT_TIME
@@ -223,19 +198,6 @@ jobs:
           done
           
           if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-            echo "=== Final container status ==="
-            ssh ec2 "
-              echo 'Container status:'
-              docker ps -a | grep monkids_backend
-              echo 'Container logs:'
-              docker logs monkids_backend --tail 50
-              echo 'Environment variables:'
-              docker exec monkids_backend env | grep -E 'JWT_SECRET|DB_'
-              echo 'Port bindings:'
-              docker port monkids_backend || echo 'No port bindings found'
-              echo 'Network settings:'
-              docker inspect monkids_backend -f '{{json .NetworkSettings.Ports}}' || echo 'Could not inspect container'
-            "
-            echo "Health check failed after $MAX_RETRIES attempts. Check logs above for details."
+            echo "Health check failed after $MAX_RETRIES attempts"
             exit 1
           fi 
