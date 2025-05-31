@@ -224,12 +224,13 @@ jobs:
               fi
               
               # Get health status directly
-              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
+              local health_status
+              health_status="$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null)" || health_status="unknown"
               
-              echo "Container health status: ${health_status}"
+              echo "Container health status: ${health_status:-unknown}"
               
               # Simple health check
-              if [ "${health_status}" = "healthy" ]; then
+              if [ "${health_status:-unknown}" = "healthy" ]; then
                 return 0
               fi
               
@@ -258,13 +259,14 @@ jobs:
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
                 # Do a final health check
-                health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
-                container_status=$(docker ps --no-trunc | grep monkids_backend | grep -q "healthy" && echo "yes" || echo "no")
+                local health_status container_status
+                health_status="$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null)" || health_status="unknown"
+                container_status="$(docker ps --no-trunc | grep -q "monkids_backend.*healthy" && echo "yes" || echo "no")"
                 
-                echo "Final health check status: ${health_status}"
-                echo "Container running with healthy status: ${container_status}"
+                echo "Final health check status: ${health_status:-unknown}"
+                echo "Container running with healthy status: ${container_status:-no}"
                 
-                if [ "${health_status}" = "healthy" ] || [ "${container_status}" = "yes" ]; then
+                if [ "${health_status:-unknown}" = "healthy" ] || [ "${container_status:-no}" = "yes" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
                 else
