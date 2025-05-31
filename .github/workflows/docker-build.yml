@@ -54,41 +54,58 @@ jobs:
           build-args: |
             NODE_ENV=production
 
-      - name: Configure SSH and Deploy
+      - name: Setup SSH
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          # Setup SSH
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           echo -e "Host ec2\n\tHostName $EC2_HOST\n\tUser $EC2_USERNAME\n\tIdentityFile ~/.ssh/key\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile=/dev/null" > ~/.ssh/config
-          
-          # Deploy to EC2
+
+      - name: Deploy to EC2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+          JWT_REFRESH_EXPIRATION: ${{ secrets.JWT_REFRESH_EXPIRATION }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
+          PORT: ${{ secrets.PORT }}
+          NODE_ENV: production
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+        run: |
           ssh ec2 "
             set -e
             cd ~/monkid_management
             
             # Quick environment setup
             cat > .env << 'EOL'
-            DATABASE_HOST=${{ env.DATABASE_HOST }}
-            DATABASE_PORT=${{ env.DATABASE_PORT }}
-            DATABASE_USERNAME=${{ env.DATABASE_USERNAME }}
-            DATABASE_PASSWORD=${{ env.DATABASE_PASSWORD }}
-            DATABASE_NAME=${{ env.DATABASE_NAME }}
-            JWT_SECRET=${{ env.JWT_SECRET }}
-            JWT_REFRESH_SECRET=${{ env.JWT_REFRESH_SECRET }}
-            JWT_EXPIRATION=${{ env.JWT_EXPIRATION }}
-            JWT_REFRESH_EXPIRATION=${{ env.JWT_REFRESH_EXPIRATION }}
-            GOOGLE_CLIENT_ID=${{ env.GOOGLE_CLIENT_ID }}
-            GOOGLE_CLIENT_SECRET=${{ env.GOOGLE_CLIENT_SECRET }}
-            GOOGLE_CALLBACK_URL=${{ env.GOOGLE_CALLBACK_URL }}
-            PORT=${{ env.PORT }}
-            NODE_ENV=${{ env.NODE_ENV }}
-            FRONTEND_URL=${{ env.FRONTEND_URL }}
+            DATABASE_HOST=${DATABASE_HOST}
+            DATABASE_PORT=${DATABASE_PORT}
+            DATABASE_USERNAME=${DATABASE_USERNAME}
+            DATABASE_PASSWORD=${DATABASE_PASSWORD}
+            DATABASE_NAME=${DATABASE_NAME}
+            JWT_SECRET=${JWT_SECRET}
+            JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+            JWT_EXPIRATION=${JWT_EXPIRATION}
+            JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+            GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+            PORT=${PORT}
+            NODE_ENV=${NODE_ENV}
+            FRONTEND_URL=${FRONTEND_URL}
             DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
             EOL
             
@@ -122,18 +139,49 @@ jobs:
 
       - name: Verify Deployment
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
+          # Wait for services to be fully ready
+          sleep 5
+          
+          # Try to verify deployment
           for i in {1..3}; do
+            echo "Verification attempt $i/3..."
+            
             if ssh ec2 "
-              curl -sf http://localhost:8000/api/health >/dev/null && 
-              curl -sfk https://api.monkids.site/api/health >/dev/null
+              # Check backend health
+              if ! curl -sf http://localhost:8000/api/health >/dev/null; then
+                echo 'Backend health check failed'
+                docker logs --tail 20 monkids_backend
+                exit 1
+              fi
+              
+              # Check nginx/https
+              if ! curl -sfk https://api.monkids.site/api/health >/dev/null; then
+                echo 'HTTPS health check failed'
+                docker logs --tail 20 nginx
+                exit 1
+              fi
+              
+              echo 'All health checks passed'
             "; then
               echo "Deployment verified successfully"
               exit 0
             fi
-            [ $i -eq 3 ] && { echo "Verification failed"; exit 1; }
+            
+            [ $i -eq 3 ] && { 
+              echo "=== Final Status ==="
+              ssh ec2 "
+                echo 'Container Status:'
+                docker ps -a
+                echo 'Backend Logs:'
+                docker logs --tail 50 monkids_backend
+                echo 'Nginx Logs:'
+                docker logs --tail 50 nginx
+              "
+              echo "Verification failed after 3 attempts"
+              exit 1
+            }
+            
+            echo "Waiting before next attempt..."
             sleep 5
           done 
