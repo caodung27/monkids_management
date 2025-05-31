@@ -138,13 +138,16 @@ jobs:
 
           echo 'Stopping existing containers...'
           docker-compose down --remove-orphans
-
+          
           echo 'Cleaning up Docker system...'
           docker system prune -f
           
           echo 'Setting up directories and permissions...'
           sudo mkdir -p /etc/letsencrypt
           sudo chown -R $USER:$USER /etc/letsencrypt
+          
+          echo 'Creating Docker network...'
+          docker network create monkids-network || true
           
           echo 'Pulling new images...'
           docker-compose pull
@@ -153,16 +156,7 @@ jobs:
           docker-compose up -d backend
           
           echo 'Waiting for backend startup...'
-          sleep 10
-          
-          echo '=== Fix Puppeteer Permissions ==='
-          docker exec monkids_backend sh -c '
-            mkdir -p /home/pptruser/.local/share/applications
-            mkdir -p /home/pptruser/.cache/{fontconfig,puppeteer}
-            mkdir -p /home/pptruser/.config
-            chown -R pptruser:pptruser /home/pptruser
-            chmod -R 755 /home/pptruser
-          '
+          sleep 15
           
           echo '=== Backend Container Status ==='
           docker ps -a | grep backend
@@ -175,13 +169,18 @@ jobs:
           
           echo '=== Starting Nginx ==='
           docker-compose up -d nginx
+          sleep 5
           
           echo '=== Nginx Status ==='
           docker ps -a | grep nginx
           docker logs nginx
           
           echo '=== Network Status ==='
+          docker network inspect monkids-network
           netstat -tulpn | grep -E ':(80|443|8000)' || true
+          
+          echo '=== Testing HTTPS ==='
+          curl -v -k https://api.monkids.site/api/health || true
           "
 
       - name: Health check
@@ -206,10 +205,11 @@ jobs:
             
             echo '=== Testing Backend API ==='
             curl -v http://localhost:8000/api/health
-            curl -v https://api.monkids.site/api/health || true
+            curl -v -k https://api.monkids.site/api/health || true
             
             echo '=== Network Status ==='
-            netstat -tulpn | grep -E ':(80|443|8000)'
+            docker network ls
+            docker network inspect monkids-network
           " || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
             echo "Health check failed. Waiting $WAIT_TIME seconds before retry..."
             sleep $WAIT_TIME

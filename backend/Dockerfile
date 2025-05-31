@@ -47,9 +47,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r pptruser \
     && useradd -r -g pptruser -G audio,video pptruser \
-    && mkdir -p /home/pptruser/{Downloads,.local/share/applications,.cache/{fontconfig,puppeteer},.config} \
+    && mkdir -p /home/pptruser \
+    && mkdir -p /home/pptruser/.local/share/applications \
+    && mkdir -p /home/pptruser/.cache/fontconfig \
+    && mkdir -p /home/pptruser/.cache/puppeteer \
+    && mkdir -p /home/pptruser/.config \
+    && touch /home/pptruser/.local/share/applications/mimeapps.list \
     && chown -R pptruser:pptruser /home/pptruser \
-    && chmod -R 755 /home/pptruser
+    && chmod -R 755 /home/pptruser \
+    && mkdir -p /var/run/dbus \
+    && chown -R pptruser:pptruser /var/run/dbus \
+    && chmod -R 755 /var/run/dbus
 
 # Copy only necessary files from builder
 COPY --from=builder /app/dist ./dist
