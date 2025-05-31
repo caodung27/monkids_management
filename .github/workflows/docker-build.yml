@@ -81,104 +81,109 @@ jobs:
           if [ ! -f ../backend/.env ]; then
             echo "Warning: .env file not found in backend directory"
             # Create minimal .env file for deployment
-            cat > .env << 'EOF'
-            NODE_ENV=production
-            PORT=8000
-            EOF
+            cat > .env << EOF
+NODE_ENV=production
+PORT=8000
+EOF
           else
             cp ../backend/.env .
           fi
           
           # Create docker-compose.yml
           echo "Creating docker-compose.yml..."
-          cat > docker-compose.yml << 'EOF'
-          version: '3.8'
-          
-          services:
-            backend:
-              image: ${DOCKERHUB_USERNAME}/monkids-backend:latest
-              container_name: monkids_backend
-              restart: unless-stopped
-              ports:
-                - "8000:8000"
-              env_file:
-                - .env
-              environment:
-                - NODE_ENV=production
-                - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-                - CHROME_PATH=/usr/bin/google-chrome
-                - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new,--disable-software-rasterizer,--disable-dbus,--disable-extensions,--no-first-run,--no-zygote,--single-process
-                - NO_SANDBOX=true
-                - DBUS_SESSION_BUS_ADDRESS=/dev/null
-                - DISPLAY=:99
-                - HOME=/tmp
-                - XDG_RUNTIME_DIR=/tmp
-                - XDG_CACHE_HOME=/tmp/.cache
-                - XDG_CONFIG_HOME=/tmp/.config
-                - XDG_DATA_HOME=/tmp/.local/share
-                - CHROME_DBUS_SYSTEM_BUS_SOCKET=/dev/null
-                - CHROME_DBUS_SESSION_BUS_SOCKET=/dev/null
-              user: root
-              security_opt:
-                - seccomp=unconfined
-              cap_add:
-                - SYS_ADMIN
-              volumes:
-                - ./data:/app/data
-              tmpfs:
-                - /tmp:exec,mode=1777,size=2G
-                - /run:exec,mode=1777
-                - /run/lock:exec,mode=1777
-                - /dev/shm:mode=1777,size=2G
-              ipc: host
-              healthcheck:
-                test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost:8000/api/health"]
-                interval: 10s
-                timeout: 5s
-                retries: 3
-              networks:
-                - monkids-network
-          
-            nginx:
-              image: nginx:alpine
-              container_name: nginx
-              restart: unless-stopped
-              ports:
-                - "80:80"
-                - "443:443"
-              volumes:
-                - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-                - /etc/letsencrypt:/etc/letsencrypt:ro
-                - nginx-cache:/var/cache/nginx
-              tmpfs:
-                - /tmp
-              depends_on:
-                backend:
-                  condition: service_healthy
-                  required: true
-              networks:
-                - monkids-network
-              healthcheck:
-                test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost/api/health"]
-                interval: 10s
-                timeout: 5s
-                retries: 3
-              deploy:
-                resources:
-                  limits:
-                    cpus: '0.1'
-                    memory: 128M
-          
-          networks:
-            monkids-network:
-              name: monkids-network
-              driver: bridge
-          
-          volumes:
-            nginx-cache:
-          EOF
-          
+          cat > docker-compose.yml << EOF
+version: '3.8'
+
+services:
+  backend:
+    image: \${DOCKERHUB_USERNAME}/monkids-backend:latest
+    container_name: monkids_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - CHROME_PATH=/usr/bin/google-chrome
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+      - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new,--disable-software-rasterizer,--disable-dbus,--disable-extensions,--no-first-run,--no-zygote,--single-process
+      - NO_SANDBOX=true
+      - DBUS_SESSION_BUS_ADDRESS=/dev/null
+      - DISPLAY=:99
+      - HOME=/tmp
+      - XDG_RUNTIME_DIR=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - XDG_CONFIG_HOME=/tmp/.config
+      - XDG_DATA_HOME=/tmp/.local/share
+      - CHROME_DBUS_SYSTEM_BUS_SOCKET=/dev/null
+      - CHROME_DBUS_SESSION_BUS_SOCKET=/dev/null
+    user: root
+    security_opt:
+      - seccomp=unconfined
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - ./data:/app/data
+    tmpfs:
+      - /tmp:exec,mode=1777,size=2G
+      - /run:exec,mode=1777
+      - /run/lock:exec,mode=1777
+      - /dev/shm:mode=1777,size=2G
+    ipc: host
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - monkids-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx-cache:/var/cache/nginx
+    tmpfs:
+      - /tmp
+    depends_on:
+      backend:
+        condition: service_healthy
+        required: true
+    networks:
+      - monkids-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-proxy", "http://localhost/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  monkids-network:
+    name: monkids-network
+    driver: bridge
+
+volumes:
+  nginx-cache:
+EOF
+
+          # Copy nginx configuration
+          echo "Copying nginx configuration..."
+          mkdir -p nginx
+          cp ../nginx/nginx.conf nginx/
+
           # Create data directory
           mkdir -p data
           
@@ -210,7 +215,7 @@ jobs:
             docker-compose config
             
             # Pull and start services
-            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+            docker login -u \$DOCKERHUB_USERNAME -p \$DOCKERHUB_TOKEN
             docker-compose pull --quiet
             
             # Start backend first
@@ -228,29 +233,29 @@ jobs:
               container_id=''
               
               # Get container ID first
-              container_id=\$(docker ps -qf 'name=^monkids_backend$' 2>/dev/null)
-              if [ -z \"\$container_id\" ]; then
+              container_id=\\\$(docker ps -qf 'name=^monkids_backend\$' 2>/dev/null)
+              if [ -z \\\"\\\$container_id\\\" ]; then
                 echo 'Container not found'
                 docker ps -a
                 return 1
               fi
               
               # Get detailed container status and health
-              container_status=\$(docker inspect --format='{{.State.Status}}' \"\$container_id\" 2>/dev/null)
-              health_status=\$(docker inspect --format='{{.State.Health.Status}}' \"\$container_id\" 2>/dev/null)
+              container_status=\\\$(docker inspect --format='{{.State.Status}}' \\\"\\\$container_id\\\" 2>/dev/null)
+              health_status=\\\$(docker inspect --format='{{.State.Health.Status}}' \\\"\\\$container_id\\\" 2>/dev/null)
               
-              echo \"Container status: \${container_status:-unknown}, health: \${health_status:-unknown}\"
+              echo \\\"Container status: \\\${container_status:-unknown}, health: \\\${health_status:-unknown}\\\"
               
-              if [ \"\$container_status\" != 'running' ]; then
-                echo \"Container is not running (status: \${container_status:-unknown})\"
-                docker logs \"\$container_id\" || true
+              if [ \\\"\\\$container_status\\\" != 'running' ]; then
+                echo \\\"Container is not running (status: \\\${container_status:-unknown})\\\"
+                docker logs \\\"\\\$container_id\\\" || true
                 return 1
               fi
               
               # Check application logs for startup message
-              if ! docker logs \"\$container_id\" 2>&1 | grep -q 'Application is running on port: 8000'; then
+              if ! docker logs \\\"\\\$container_id\\\" 2>&1 | grep -q 'Application is running on port: 8000'; then
                 echo 'Application startup message not found in logs'
-                docker logs \"\$container_id\" --tail 50 || true
+                docker logs \\\"\\\$container_id\\\" --tail 50 || true
                 return 1
               fi
               
@@ -260,7 +265,7 @@ jobs:
                   echo 'Health endpoint check passed'
                   return 0
                 fi
-                echo \"Health check attempt \$i failed, retrying...\"
+                echo \\\"Health check attempt \\\$i failed, retrying...\\\"
                 sleep 2
               done
               
@@ -273,10 +278,10 @@ jobs:
             max_attempts=3
             
             echo 'Waiting for backend to be healthy...'
-            while [ \$attempts -lt \$max_attempts ]
+            while [ \\\$attempts -lt \\\$max_attempts ]
             do
-              attempts=\$((attempts + 1))
-              echo \"Health check attempt \$attempts/\$max_attempts\"
+              attempts=\\\$((attempts + 1))
+              echo \\\"Health check attempt \\\$attempts/\\\$max_attempts\\\"
               
               # Give container more time to initialize
               sleep 15
@@ -291,8 +296,8 @@ jobs:
               docker inspect monkids_backend --format='{{.State.Health}}' || true
               
               # Exit if max attempts reached
-              if [ \$attempts -eq \$max_attempts ]; then
-                echo \"Backend failed to become healthy after \$max_attempts attempts\"
+              if [ \\\$attempts -eq \\\$max_attempts ]; then
+                echo \\\"Backend failed to become healthy after \\\$max_attempts attempts\\\"
                 docker ps -a
                 docker logs monkids_backend --tail 100 || true
                 exit 1
@@ -320,7 +325,7 @@ jobs:
               fi
               
               # Verify nginx is responding
-              if ! wget -q --spider http://localhost/health 2>/dev/null; then
+              if ! wget -q --spider http://localhost/api/health 2>/dev/null; then
                 echo 'Nginx is not responding'
                 docker logs nginx || true
                 docker exec nginx nginx -t || true
