@@ -17,6 +17,25 @@ on:
 env:
   REGISTRY: docker.io
   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
+  # Database Configuration
+  DATABASE_HOST: 172.31.14.122
+  DATABASE_PORT: 5432
+  DATABASE_USERNAME: postgres
+  DATABASE_PASSWORD: postgres
+  DATABASE_NAME: postgres
+  # JWT Configuration
+  JWT_SECRET: monkids
+  JWT_REFRESH_SECRET: monkids
+  JWT_EXPIRATION: 1d
+  JWT_REFRESH_EXPIRATION: 7d
+  # Google OAuth2 Configuration
+  GOOGLE_CLIENT_ID: 542269964324-6kmatcq5rp191efr3eiouu60hkqdg6jk.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET: 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
+  GOOGLE_CALLBACK_URL: https://api.monkids.site/api/auth/google/callback
+  # Application Configuration
+  PORT: 8000
+  NODE_ENV: production
+  FRONTEND_URL: https://www.monkids.site/
 
 jobs:
   build-and-deploy:
@@ -62,8 +81,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
-      # Deploy steps (only run on push to main, not on PR)
-      - name: Configure SSH for EC2
+      - name: Configure SSH
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           mkdir -p ~/.ssh/
@@ -77,129 +95,69 @@ jobs:
             StrictHostKeyChecking no
           END
 
-      - name: Setup Project Directory
+      - name: Copy configuration files to EC2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          ssh ec2 '
-          mkdir -p ~/monkid_management
-          mkdir -p ~/monkid_management/data
-          chmod 755 ~/monkid_management
-          '
-
-      - name: Cleanup EC2 Disk Space
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          ssh ec2 '
-          docker system prune -af --volumes
-          docker images -q | xargs -r docker rmi -f
-          sudo apt-get clean
-          sudo apt-get autoremove -y
-          df -h
-          '
-
-      - name: Setup EC2 Docker
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          ssh ec2 "
-          echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-          docker pull ${{ env.DOCKER_IMAGE }} || {
-            echo 'Failed to pull image. Checking disk space...'
-            df -h
-            exit 1
-          }
-          "
-
-      - name: Update docker-compose.yml
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          cat > docker-compose.yml <<'EOL'
-          version: '3.8'
-          
-          services:
-            backend:
-              image: ${DOCKER_USERNAME}/monkids-backend:latest
-              container_name: monkids_backend
-              restart: unless-stopped
-              ports:
-                - "8000:8000"
-              environment:
-                - NODE_ENV=production
-                - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_NO_SANDBOX=true
-                - DISPLAY=:99
-              security_opt:
-                - seccomp=unconfined
-              cap_add:
-                - SYS_ADMIN
-              volumes:
-                - ./data:/app/data
-                - /tmp/.X11-unix:/tmp/.X11-unix
-              tmpfs:
-                - /tmp
-              deploy:
-                resources:
-                  limits:
-                    cpus: '1.0'
-                    memory: 2G
-                  reservations:
-                    cpus: '0.5'
-                    memory: 1G
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 40s
-
-            nginx:
-              image: nginx:alpine
-              ports:
-                - "80:80"
-                - "443:443"
-              volumes:
-                - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-                - /etc/letsencrypt:/etc/letsencrypt:ro
-                - nginx-cache:/var/cache/nginx
-              tmpfs:
-                - /tmp
-              depends_on:
-                backend:
-                  condition: service_healthy
-              networks:
-                - monkids-network
-              logging:
-                driver: "json-file"
-                options:
-                  max-size: "5m"
-                  max-file: "3"
-              deploy:
-                resources:
-                  limits:
-                    cpus: '0.1'
-                    memory: 128M
-              healthcheck:
-                test: ["CMD", "nginx", "-t"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-              restart: unless-stopped
-
-          networks:
-            monkids-network:
-              driver: bridge
-
-          volumes:
-            nginx-cache:
-          EOL
-          scp docker-compose.yml ec2:~/monkid_management/
+          scp backend/docker-compose.yml ec2:~/monkid_management/
+          scp -r nginx ec2:~/monkid_management/
 
       - name: Deploy with Docker Compose
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           ssh ec2 "
           cd ~/monkid_management
-          export DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-          export DOCKER_IMAGE=${{ env.DOCKER_IMAGE }}
+          
+          # Create .env file with required environment variables
+          cat > .env << EOL
+          # Database Configuration
+          DATABASE_HOST=${{ env.DATABASE_HOST }}
+          DATABASE_PORT=${{ env.DATABASE_PORT }}
+          DATABASE_USERNAME=${{ env.DATABASE_USERNAME }}
+          DATABASE_PASSWORD=${{ env.DATABASE_PASSWORD }}
+          DATABASE_NAME=${{ env.DATABASE_NAME }}
+
+          # JWT Configuration
+          JWT_SECRET=${{ env.JWT_SECRET }}
+          JWT_REFRESH_SECRET=${{ env.JWT_REFRESH_SECRET }}
+          JWT_EXPIRATION=${{ env.JWT_EXPIRATION }}
+          JWT_REFRESH_EXPIRATION=${{ env.JWT_REFRESH_EXPIRATION }}
+
+          # Google OAuth2 Configuration
+          GOOGLE_CLIENT_ID=${{ env.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ env.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_CALLBACK_URL=${{ env.GOOGLE_CALLBACK_URL }}
+
+          # Application Configuration
+          PORT=${{ env.PORT }}
+          NODE_ENV=${{ env.NODE_ENV }}
+          FRONTEND_URL=${{ env.FRONTEND_URL }}
+
+          # Docker configuration
+          DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          EOL
+          
+          # Verify environment variables
+          echo 'Verifying environment variables...'
+          if [ ! -f .env ]; then
+            echo 'Error: .env file not created'
+            exit 1
+          fi
+          
+          # Check if required variables are set
+          required_vars=(
+            DATABASE_HOST DATABASE_PORT DATABASE_USERNAME DATABASE_PASSWORD DATABASE_NAME
+            JWT_SECRET JWT_REFRESH_SECRET JWT_EXPIRATION JWT_REFRESH_EXPIRATION
+            GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_CALLBACK_URL
+            PORT NODE_ENV FRONTEND_URL DOCKER_USERNAME
+          )
+          for var in \${required_vars[@]}; do
+            if ! grep -q "^\$var=" .env; then
+              echo "Error: \$var is not set in .env file"
+              exit 1
+            fi
+          done
+          
+          echo 'Environment variables verified successfully'
           
           echo 'Stopping existing containers...'
           docker-compose down
@@ -243,6 +201,10 @@ jobs:
               exit 1
             fi
             
+            # Check environment variables
+            echo 'Checking environment variables...'
+            docker exec monkids_backend env | grep -E 'JWT_SECRET|DB_'
+            
             # Check port binding
             echo 'Checking port binding...'
             if ! docker port monkids_backend | grep -q '8000'; then
@@ -267,6 +229,8 @@ jobs:
               docker ps -a | grep monkids_backend
               echo 'Container logs:'
               docker logs monkids_backend --tail 50
+              echo 'Environment variables:'
+              docker exec monkids_backend env | grep -E 'JWT_SECRET|DB_'
               echo 'Port bindings:'
               docker port monkids_backend || echo 'No port bindings found'
               echo 'Network settings:'
