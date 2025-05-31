@@ -120,7 +120,6 @@ jobs:
                 interval: 10s
                 timeout: 5s
                 retries: 5
-                start_period: 30s
               networks:
                 - monkids-network
           
@@ -214,35 +213,38 @@ jobs:
             echo 'Waiting for backend to be healthy...'
             MAX_ATTEMPTS=5
             ATTEMPT=1
-            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Checking backend health..."
+            
+            until [ "$ATTEMPT" -gt "$MAX_ATTEMPTS" ]; do
+              echo "Attempt ${ATTEMPT} of ${MAX_ATTEMPTS}: Checking backend health..."
               
-              CONTAINER_STATUS=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
-              echo "Container health status: $CONTAINER_STATUS"
+              if ! CONTAINER_STATUS=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null); then
+                CONTAINER_STATUS="error"
+              fi
+              echo "Container health status: ${CONTAINER_STATUS}"
               
-              if [ "$CONTAINER_STATUS" = "healthy" ]; then
+              if [ "${CONTAINER_STATUS}" = "healthy" ]; then
                 echo 'Backend is healthy'
                 break
               fi
               
-              if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              if [ "$ATTEMPT" -eq "$MAX_ATTEMPTS" ]; then
                 echo 'Backend failed to become healthy. Showing logs and status:'
                 docker ps
                 docker logs monkids_backend
-                docker inspect monkids_backend
+                docker inspect monkids_backend || true
                 exit 1
               fi
               
               # Show recent logs on each attempt
               echo "Recent backend logs:"
-              docker logs --tail 20 monkids_backend
+              docker logs --tail 20 monkids_backend || true
               
               ATTEMPT=$((ATTEMPT + 1))
               sleep 10
             done
             
             # Only start nginx if backend is healthy
-            if [ "$CONTAINER_STATUS" = "healthy" ]; then
+            if [ "${CONTAINER_STATUS}" = "healthy" ]; then
               echo "Starting nginx..."
               docker-compose up -d nginx
               
@@ -250,10 +252,13 @@ jobs:
               sleep 5
               
               # Verify nginx is running
-              NGINX_STATUS=$(docker inspect --format='{{.State.Health.Status}}' nginx 2>/dev/null || echo "error")
-              if [ "$NGINX_STATUS" != "healthy" ]; then
+              if ! NGINX_STATUS=$(docker inspect --format='{{.State.Health.Status}}' nginx 2>/dev/null); then
+                NGINX_STATUS="error"
+              fi
+              
+              if [ "${NGINX_STATUS}" != "healthy" ]; then
                 echo 'Nginx failed to start or become healthy'
-                docker logs nginx
+                docker logs nginx || true
                 exit 1
               fi
               
