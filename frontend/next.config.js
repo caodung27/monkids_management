@@ -14,7 +14,7 @@ const nextConfig = {
     });
     return config;
   },
-  // Only for development
+  // Development API proxy
   rewrites: process.env.NODE_ENV === 'development' ? async () => {
     return [
       {
@@ -24,6 +24,14 @@ const nextConfig = {
       {
         source: '/auth/:path*',
         destination: 'http://localhost:8000/api/auth/:path*',
+      },
+      {
+        source: '/attendance/:path*',
+        destination: 'http://localhost:8000/api/attendance/:path*',
+      },
+      {
+        source: '/export/:path*',
+        destination: 'http://localhost:8000/api/export/:path*',
       },
     ];
   } : undefined,

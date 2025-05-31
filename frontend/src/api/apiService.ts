@@ -38,8 +38,6 @@ export const TokenService = {
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
-  // baseURL: process.env.NEXT_PUBLIC_API_URL,
-  // only for development
   baseURL: process.env.NODE_ENV === 'development' ? '/api' : process.env.NEXT_PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -469,7 +467,7 @@ export const statsApi = {
 // Attendance API
 export const attendanceApi = {
   getTeacherAttendance: async (teacherId: string, year: number, month: number) => {
-    const response = await apiClient.get(`${process.env.NEXT_PUBLIC_API_URL}/attendance/${teacherId}/${year}/${month}`);
+    const response = await apiClient.get(`/attendance/${teacherId}/${year}/${month}`);
     return response.data;
   },
 
@@ -490,7 +488,7 @@ export const attendanceApi = {
     absent_days?: number[];
     extra_days?: number[];
   }) => {
-    const response = await apiClient.post(`${process.env.NEXT_PUBLIC_API_URL}/attendance`, {
+    const response = await apiClient.post('/attendance', {
       teacherId,
       year,
       month,
