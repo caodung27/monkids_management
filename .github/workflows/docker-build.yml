@@ -99,9 +99,12 @@ jobs:
                 - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
                 - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new
                 - NO_SANDBOX=true
-                - DBUS_SESSION_BUS_ADDRESS=/dev/null
+                - DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
                 - DISPLAY=:99
                 - HOME=/tmp
+                - XDG_CACHE_HOME=/tmp/.cache
+                - XDG_CONFIG_HOME=/tmp/.config
+                - XDG_DATA_HOME=/tmp/.local/share
               user: root
               security_opt:
                 - seccomp=unconfined
@@ -109,6 +112,7 @@ jobs:
                 - SYS_ADMIN
               volumes:
                 - ./data:/app/data
+                - /var/run/dbus:/var/run/dbus
               tmpfs:
                 - /tmp:exec,mode=1777,size=2G
                 - /run:exec,mode=1777
@@ -120,6 +124,7 @@ jobs:
                 interval: 10s
                 timeout: 5s
                 retries: 5
+                start_period: 30s
               networks:
                 - monkids-network
           
@@ -216,6 +221,9 @@ jobs:
             
             # Function to check if container is running and healthy
             check_container_health() {
+              local container_status
+              local health_status
+              
               # Check if container exists and is running
               if ! docker ps | grep -q monkids_backend; then
                 echo "Container is not running"
@@ -224,24 +232,38 @@ jobs:
                 return 1
               fi
               
-              # Get health status
-              local health_status
-              health_status="$(get_container_health)"
-              
-              echo "Container health status: ${health_status:-unknown}"
-              
-              # Check if healthy
-              if [ "${health_status:-unknown}" = "healthy" ]; then
-                return 0
+              # Check if container is actually running and not just created
+              container_status=$(docker ps --format '{{.Status}}' --filter "name=monkids_backend" 2>/dev/null)
+              if [ -z "${container_status}" ]; then
+                echo "Container status check failed"
+                return 1
               fi
               
-              return 1
+              # Get health status
+              health_status=$(get_container_health)
+              echo "Container health status: ${health_status}"
+              
+              # Check if container is running the application
+              if ! docker logs monkids_backend 2>&1 | grep -q "Application is running on port: 8000"; then
+                echo "Application not yet running"
+                return 1
+              fi
+              
+              # Check if health endpoint is responding
+              if ! docker exec monkids_backend wget -q --spider http://localhost:8000/api/health; then
+                echo "Health endpoint not responding"
+                return 1
+              fi
+              
+              # If we got here, container is healthy
+              return 0
             }
             
             # Initialize variables
             attempts=0
-            max_attempts=5
+            max_attempts=10
             
+            echo "Waiting for backend to be healthy..."
             while [ $attempts -lt $max_attempts ]
             do
               attempts=$((attempts + 1))
@@ -264,17 +286,19 @@ jobs:
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
                 # Get final status
-                health_status="$(get_container_health)"
-                is_healthy=$(docker ps --no-trunc | grep monkids_backend | grep -q "healthy" && echo "yes" || echo "no")
+                health_status=$(get_container_health)
+                container_status=$(docker ps --format '{{.Status}}' --filter "name=monkids_backend" 2>/dev/null)
                 
                 echo "Final health check status: ${health_status:-unknown}"
-                echo "Container running with healthy status: ${is_healthy}"
+                echo "Container status: ${container_status:-unknown}"
                 
-                if [ "${health_status:-unknown}" = "healthy" ] || [ "${is_healthy}" = "yes" ]; then
-                  echo "Container is actually healthy, proceeding with deployment"
+                # One last check for application logs
+                if docker logs monkids_backend 2>&1 | grep -q "Application is running on port: 8000"; then
+                  echo "Application appears to be running despite health check failure"
+                  echo "Proceeding with deployment..."
                   break
                 else
-                  echo "Container is not healthy"
+                  echo "Container is not healthy and application is not running"
                   docker ps -a
                   docker logs monkids_backend || true
                   exit 1
@@ -283,12 +307,26 @@ jobs:
             done
             
             # Final verification
+            echo "Performing final health verification..."
             if check_container_health; then
               echo "Backend container is verified healthy and ready for nginx"
               
               # Only start nginx if backend is healthy
               echo "Starting nginx..."
               docker-compose up -d nginx
+              
+              # Wait briefly for nginx to start
+              sleep 5
+              
+              # Verify nginx started
+              if ! docker ps | grep -q nginx; then
+                echo "Nginx failed to start"
+                docker logs nginx || true
+                exit 1
+              fi
+              
+              echo "Deployment completed successfully"
+              docker ps --format "{{.Names}} - {{.Status}}"
             else
               echo "Final verification failed - container is not healthy"
               docker ps -a
