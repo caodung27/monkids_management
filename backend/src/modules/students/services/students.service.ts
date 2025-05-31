@@ -62,6 +62,15 @@ export class StudentsService {
   }
 
   async create(createStudentDto: CreateStudentDto): Promise<Student> {
+    // Get max student_id to generate new one
+    const maxStudentIdResult = await this.studentRepository
+      .createQueryBuilder('student')
+      .select('MAX(student.student_id)', 'maxStudentId')
+      .getRawOne();
+    
+    const maxStudentId = maxStudentIdResult?.maxStudentId || 0;
+    const newStudentId = maxStudentId + 1;
+
     // Calculate final fee
     const baseFee = Number(createStudentDto.base_fee || 0);
     const discountPercentage = Number(createStudentDto.discount_percentage || 0);
@@ -94,6 +103,7 @@ export class StudentsService {
 
     const student = this.studentRepository.create({
       ...createStudentDto,
+      student_id: newStudentId,
       sequential_number: uuidv4(),
       final_fee: finalFee,
       meal_fee: mealFee,

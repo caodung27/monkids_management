@@ -130,18 +130,12 @@ export default function NewStudentPage() {
         return;
       }
 
-      // Get total students count to generate student_id
-      const response = await studentApi.getAllStudents(1, 1);
-      const totalStudents = response.totalElements || 0;
-      const student_id = totalStudents + 1;
-
       // Calculate final fee
       const baseFee = Number(formValues.base_fee || 0);
       const discountPercentage = Number(formValues.discount_percentage) || 0;
       const finalFee = Math.round(baseFee * (1 - discountPercentage));
       
       const apiPayload = {
-        student_id,
         name: formValues.name,
         classroom: formValues.classroom,
         birthdate: formValues.birthdate ? formValues.birthdate.toISOString().split('T')[0] : null,

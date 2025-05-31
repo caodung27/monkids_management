@@ -340,7 +340,7 @@ export const profileApi = {
     throw error;
    }
   },
-  updateUser: async (id: string, formData: ProfileData) => {
+  updateUser: async (id: string, formData: Partial<ProfileData>) => {
     const response = await apiClient.patch(`/users/${id}`, formData);
     return response.data;
   },

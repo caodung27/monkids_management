@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Title,
@@ -31,21 +31,20 @@ export default function AccountsPage() {
 
   const handleUpdateAccount = async (id: string, updates: Partial<ProfileData>) => {
     try {
-      const response = await profileApi.updateUser(id, updates);
-      if (response.ok) {
-        notifications.show({
-          title: 'Thành công',
-          message: 'Cập nhật tài khoản thành công',
-          color: 'green',
-        });
-        // Refresh accounts list
-        fetchAccounts();
-        setIsEditModalOpen(false);
-      }
-    } catch (error) {
+      await profileApi.updateUser(id, updates);
+      notifications.show({
+        title: 'Thành công',
+        message: 'Cập nhật tài khoản thành công',
+        color: 'green',
+      });
+      // Refresh accounts list
+      fetchAccounts();
+      setIsEditModalOpen(false);
+    } catch (error: any) {
+      console.error('Error updating account:', error);
       notifications.show({
         title: 'Lỗi',
-        message: 'Không thể cập nhật tài khoản',
+        message: error.response?.data?.message || 'Không thể cập nhật tài khoản',
         color: 'red',
       });
     }
@@ -55,42 +54,46 @@ export default function AccountsPage() {
     if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
 
     try {
-      const response = await profileApi.deleteUser(id);
-
-      if (response.ok) {
-        notifications.show({
-          title: 'Thành công',
-          message: 'Xóa tài khoản thành công',
-          color: 'green',
-        });
-        // Refresh accounts list
-        fetchAccounts();
-      }
-    } catch (error) {
+      await profileApi.deleteUser(id);
+      notifications.show({
+        title: 'Thành công',
+        message: 'Xóa tài khoản thành công',
+        color: 'green',
+      });
+      // Refresh accounts list
+      fetchAccounts();
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
       notifications.show({
         title: 'Lỗi',
-        message: 'Không thể xóa tài khoản',
+        message: error.response?.data?.message || 'Không thể xóa tài khoản',
         color: 'red',
       });
     }
   };
 
+  // Fetch accounts on component mount
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
+
   const fetchAccounts = async () => {
     try {
-      const response = await profileApi.getAllUsers();
-      setAccounts(response);
-    } catch (error) {
+      const data = await profileApi.getAllUsers();
+      setAccounts(data);
+    } catch (error: any) {
+      console.error('Error fetching accounts:', error);
       notifications.show({
         title: 'Lỗi',
-        message: 'Không thể tải danh sách tài khoản',
+        message: error.response?.data?.message || 'Không thể tải danh sách tài khoản',
         color: 'red',
       });
     }
   };
 
   const filteredAccounts = accounts.filter(account =>
-    account.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    account.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (account.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (account.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -208,7 +211,7 @@ export default function AccountsPage() {
                   account_type: value || '',
                 })
               }
-              data={['Personal', 'Business']}
+              data={['LOCAL', 'GOOGLE']}
               mb="sm"
             />
             <Select

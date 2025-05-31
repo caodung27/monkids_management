@@ -62,9 +62,14 @@ export class TeachersService implements ITeachersService {
   }
 
   async create(createTeacherDto: CreateTeacherDto): Promise<Teacher> {
-    // Get total teachers to generate new teacher_no
-    const [, total] = await this.teacherRepository.findAndCount();
-    const newTeacherNo = total + 1;
+    // Get max teacher_no to generate new one
+    const maxTeacherNoResult = await this.teacherRepository
+      .createQueryBuilder('teacher')
+      .select('MAX(teacher.teacher_no)', 'maxTeacherNo')
+      .getRawOne();
+    
+    const maxTeacherNo = maxTeacherNoResult?.maxTeacherNo || 0;
+    const newTeacherNo = maxTeacherNo + 1;
 
     const teacher = this.teacherRepository.create({
       id: uuidv4(),

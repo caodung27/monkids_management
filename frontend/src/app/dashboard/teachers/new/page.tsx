@@ -141,6 +141,19 @@ export default function NewTeacherPage() {
 
   const handleSubmit = async (values: TeacherFormValues) => {
     try {
+      // Verify authentication first
+      const { TokenService } = await import('@/api/apiService');
+      const isAuthenticated = TokenService.checkTokensExist();
+      
+      if (!isAuthenticated) {
+        notifications.show({
+          title: 'Lỗi xác thực',
+          message: 'Bạn cần đăng nhập lại để thực hiện thao tác này.',
+          color: 'red',
+        });
+        return;
+      }
+
       const apiPayload: TeacherApiPayload = {
         ...values,
         role: values.role.join(', '),
@@ -171,11 +184,32 @@ export default function NewTeacherPage() {
         color: 'green',
       });
       router.push('/dashboard/teachers');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating teacher:', error);
+      
+      // Check for authentication errors (401)
+      if (error.response && error.response.status === 401) {
+        notifications.show({
+          title: 'Lỗi xác thực',
+          message: 'Bạn cần đăng nhập lại để thực hiện thao tác này.',
+          color: 'red',
+        });
+        return;
+      }
+      
+      // Permission error (403)
+      if (error.response && error.response.status === 403) {
+        notifications.show({
+          title: 'Không có quyền',
+          message: 'Bạn không có quyền thêm giáo viên. Chỉ quản trị viên mới có quyền này.',
+          color: 'red',
+        });
+        return;
+      }
+      
       notifications.show({
         title: 'Lỗi',
-        message: 'Có lỗi khi tạo giáo viên mới. Vui lòng thử lại sau.',
+        message: `Có lỗi khi tạo giáo viên mới: ${error.response?.data?.detail || 'Vui lòng thử lại sau.'}`,
         color: 'red',
       });
     }
@@ -239,7 +273,7 @@ export default function NewTeacherPage() {
                       <Badge color={roleOption?.color} variant="filled" size="sm" mr="xs">
                         {option.label}
                       </Badge>
-      </div>
+                    </div>
                   );
                 }}
               />
