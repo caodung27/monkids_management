@@ -1,18 +1,30 @@
 name: Deploy Backend to EC2
 
 on:
+  # Trigger when docker-build workflow completes
   workflow_run:
     workflows: ["Build and Push Docker Image in Docker Hub"]
     types:
       - completed
     branches: [ "main" ]
+  
+  # Trigger on changes to this workflow file or deployment related files
+  push:
+    branches: [ "main" ]
+    paths:
+      - '.github/workflows/backend-deploy.yml'
+      - 'docker-compose.yml'
+      - 'nginx/**'
 
 env:
   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:latest
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Run if either workflow_run succeeded or if it's triggered by file changes
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'push'
     runs-on: ubuntu-latest
     
     steps:
