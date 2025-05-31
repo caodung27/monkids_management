@@ -76,10 +76,21 @@ jobs:
           mkdir -p deploy
           cd deploy
           
-          # Copy .env file from backend
-          cp ../backend/.env .
+          # Copy .env file from backend with proper error handling
+          echo "Copying .env file..."
+          if [ ! -f ../backend/.env ]; then
+            echo "Warning: .env file not found in backend directory"
+            # Create minimal .env file for deployment
+            cat > .env << 'EOF'
+            NODE_ENV=production
+            PORT=8000
+            EOF
+          else
+            cp ../backend/.env .
+          fi
           
           # Create docker-compose.yml
+          echo "Creating docker-compose.yml..."
           cat > docker-compose.yml << 'EOF'
           version: '3.8'
           
@@ -97,7 +108,7 @@ jobs:
                 - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
                 - CHROME_PATH=/usr/bin/google-chrome
                 - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new,--disable-software-rasterizer,--disable-dbus
+                - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--headless=new,--disable-software-rasterizer,--disable-dbus,--disable-extensions,--no-first-run,--no-zygote,--single-process
                 - NO_SANDBOX=true
                 - DBUS_SESSION_BUS_ADDRESS=/dev/null
                 - DISPLAY=:99
@@ -106,6 +117,8 @@ jobs:
                 - XDG_CACHE_HOME=/tmp/.cache
                 - XDG_CONFIG_HOME=/tmp/.config
                 - XDG_DATA_HOME=/tmp/.local/share
+                - CHROME_DBUS_SYSTEM_BUS_SOCKET=/dev/null
+                - CHROME_DBUS_SESSION_BUS_SOCKET=/dev/null
               user: root
               security_opt:
                 - seccomp=unconfined
@@ -159,14 +172,15 @@ jobs:
           
           networks:
             monkids-network:
-              external: true
+              name: monkids-network
+              driver: bridge
           
           volumes:
             nginx-cache:
           EOF
           
-          # Copy nginx configuration
-          cp -r ../nginx .
+          # Create data directory
+          mkdir -p data
           
           echo "Copying files to EC2..."
           ssh ec2 "mkdir -p ~/monkid_management"
@@ -187,10 +201,7 @@ jobs:
             # Cleanup
             docker system prune -f --volumes
             
-            # Create network if it doesn't exist
-            docker network create monkids-network 2>/dev/null || true
-            
-            # Create required directories with sudo
+            # Create required directories
             mkdir -p data
             mkdir -p /tmp/.local/share/applications
             touch /tmp/.local/share/applications/mimeapps.list
@@ -202,10 +213,11 @@ jobs:
             docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
             docker-compose pull --quiet
             
-            # Start backend first to debug any issues
+            # Start backend first
+            echo 'Starting backend...'
             docker-compose up -d backend
             
-            # Show backend logs immediately
+            # Show backend logs
             echo 'Initial backend logs:'
             docker logs monkids_backend || true
             
