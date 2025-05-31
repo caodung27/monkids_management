@@ -10,13 +10,17 @@ RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
 
 # Copy package files and install dependencies
 COPY package*.json ./
+
+# Install dependencies including NestJS CLI
 RUN npm ci --only=production --legacy-peer-deps \
+    && npm i -g @nestjs/cli \
     && npm cache clean --force
 
 # Copy source and build
 COPY . .
 RUN npm run build \
-    && npm prune --production
+    && npm prune --production \
+    && rm -rf src tsconfig.json tsconfig.build.json nest-cli.json
 
 # Production stage
 FROM amazonlinux:2
@@ -77,7 +81,8 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     DISPLAY=:99 \
     HOME=/home/pptruser \
     NODE_ENV=production \
-    PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
+    PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer \
+    NODE_OPTIONS="--max-old-space-size=384"
 
 # Set final permissions
 RUN chown -R pptruser:pptruser /app /var/run/{dbus,upower} /etc/upower \

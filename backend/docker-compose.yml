@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile
       args:
         - NODE_ENV=${NODE_ENV}
+      cache_from:
+        - backend:latest
+    image: backend:latest
     ports:
       - "8000:8000"
     environment:
@@ -27,6 +30,7 @@ services:
       - PUPPETEER_DEBUG=true
       - NODE_DEBUG=puppeteer
       - DISPLAY=:99
+      - NODE_OPTIONS=--max-old-space-size=384
     security_opt:
       - seccomp=unconfined
     cap_add:
@@ -48,6 +52,8 @@ services:
       - ./public:/app/public
       - /tmp/.X11-unix:/tmp/.X11-unix
       - backend-cache:/home/pptruser/.cache
+    tmpfs:
+      - /tmp
     deploy:
       resources:
         limits:
@@ -67,6 +73,8 @@ services:
       - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - nginx-cache:/var/cache/nginx
+    tmpfs:
+      - /tmp
     depends_on:
       backend:
         condition: service_healthy
