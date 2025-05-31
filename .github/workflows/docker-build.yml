@@ -209,11 +209,12 @@ jobs:
             echo "Initial backend logs:"
             docker logs monkids_backend || true
             
-            # Wait for backend to be healthy with better logging
-            echo 'Waiting for backend to be healthy...'
-            attempts=0
-            max_attempts=5
+            # Function to get container health status
+            get_container_health() {
+              docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown"
+            }
             
+            # Function to check if container is running and healthy
             check_container_health() {
               # Check if container exists and is running
               if ! docker ps | grep -q monkids_backend; then
@@ -223,19 +224,23 @@ jobs:
                 return 1
               fi
               
-              # Get health status directly
+              # Get health status
               local health_status
-              health_status="$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null)" || health_status="unknown"
+              health_status="$(get_container_health)"
               
               echo "Container health status: ${health_status:-unknown}"
               
-              # Simple health check
+              # Check if healthy
               if [ "${health_status:-unknown}" = "healthy" ]; then
                 return 0
               fi
               
               return 1
             }
+            
+            # Initialize variables
+            attempts=0
+            max_attempts=5
             
             while [ $attempts -lt $max_attempts ]
             do
@@ -258,15 +263,14 @@ jobs:
               if [ $attempts -eq $max_attempts ]; then
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
-                # Do a final health check
-                local health_status container_status
-                health_status="$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null)" || health_status="unknown"
-                container_status="$(docker ps --no-trunc | grep -q "monkids_backend.*healthy" && echo "yes" || echo "no")"
+                # Get final status
+                health_status="$(get_container_health)"
+                is_healthy=$(docker ps --no-trunc | grep monkids_backend | grep -q "healthy" && echo "yes" || echo "no")
                 
                 echo "Final health check status: ${health_status:-unknown}"
-                echo "Container running with healthy status: ${container_status:-no}"
+                echo "Container running with healthy status: ${is_healthy}"
                 
-                if [ "${health_status:-unknown}" = "healthy" ] || [ "${container_status:-no}" = "yes" ]; then
+                if [ "${health_status:-unknown}" = "healthy" ] || [ "${is_healthy}" = "yes" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
                 else
@@ -281,35 +285,14 @@ jobs:
             # Final verification
             if check_container_health; then
               echo "Backend container is verified healthy and ready for nginx"
+              
+              # Only start nginx if backend is healthy
+              echo "Starting nginx..."
+              docker-compose up -d nginx
             else
               echo "Final verification failed - container is not healthy"
               docker ps -a
               docker logs monkids_backend || true
-              exit 1
-            fi
-            
-            # Only start nginx if backend is healthy
-            if [ "$status" = "healthy" ]; then
-              echo "Starting nginx..."
-              docker-compose up -d nginx
-              
-              # Wait briefly for nginx to start
-              sleep 5
-              
-              # Verify nginx is running
-              nginx_status=$(docker inspect nginx --format='{{.State.Health.Status}}' 2>/dev/null || echo "error")
-              echo "Nginx health status: $nginx_status"
-              
-              if [ "$nginx_status" != "healthy" ]; then
-                echo 'Nginx failed to start or become healthy'
-                docker logs nginx || true
-                exit 1
-              fi
-              
-              echo 'Deployment completed successfully'
-              docker ps --format '{{.Names}} - {{.Status}}'
-            else
-              echo 'Backend is not healthy, skipping nginx startup'
               exit 1
             fi
           "
