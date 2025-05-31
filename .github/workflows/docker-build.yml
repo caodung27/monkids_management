@@ -92,13 +92,19 @@ jobs:
                 - "8000:8000"
               env_file:
                 - .env
+              environment:
+                - NODE_ENV=production
+                - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+                - DISPLAY=:99
+                - CHROME_PATH=/usr/bin/google-chrome
+                - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+                - NO_SANDBOX=true
               security_opt:
                 - seccomp=unconfined
               cap_add:
                 - SYS_ADMIN
               volumes:
                 - ./data:/app/data
-                - /tmp/.X11-unix:/tmp/.X11-unix
               tmpfs:
                 - /tmp
               deploy:
@@ -110,11 +116,11 @@ jobs:
                     cpus: '0.5'
                     memory: 1G
               healthcheck:
-                test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+                test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8000/api/health || exit 1"]
                 interval: 10s
                 timeout: 5s
                 retries: 5
-                start_period: 60s
+                start_period: 30s
               networks:
                 - monkids-network
           
@@ -206,17 +212,22 @@ jobs:
             
             # Wait for backend to be healthy with better logging
             echo 'Waiting for backend to be healthy...'
-            for i in {1..30}; do
+            for i in $(seq 1 5); do
               echo "Attempt $i: Checking backend health..."
-              docker ps --format "{{.Names}} - {{.Status}}" | grep monkids_backend || true
               
-              if docker ps | grep -q 'monkids_backend.*healthy'; then
-                echo 'Backend is healthy'
-                break
+              if docker ps --format "{{.Names}} - {{.Status}}" | grep monkids_backend; then
+                container_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+                echo "Container health status: $container_status"
+                
+                if [ "$container_status" = "healthy" ]; then
+                  echo 'Backend is healthy'
+                  break
+                fi
               fi
               
-              if [ $i -eq 30 ]; then
-                echo 'Backend failed to become healthy. Showing logs:'
+              if [ $i -eq 5 ]; then
+                echo 'Backend failed to become healthy. Showing logs and status:'
+                docker ps
                 docker logs monkids_backend
                 docker inspect monkids_backend
                 exit 1
