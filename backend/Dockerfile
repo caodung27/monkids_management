@@ -1,8 +1,13 @@
 FROM amazonlinux:2
 
-# Cài đặt Node.js và các dependencies trong một layer
+WORKDIR /app
+
+# Install Node.js 16
 RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
-    && yum install -y nodejs wget tar xz \
+    && yum install -y nodejs
+
+# Install Chrome dependencies and system utilities
+RUN yum install -y wget tar xz \
     && amazon-linux-extras install epel -y \
     && yum install -y \
     dbus dbus-x11 \
@@ -25,54 +30,65 @@ RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     alsa-lib \
     nss \
     cups-libs \
-    GConf2 \
-    && yum clean all \
-    && rm -rf /var/cache/yum
+    GConf2
 
-# Cài đặt Chrome
+# Install Chrome
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
     && yum install -y ./google-chrome-stable_current_x86_64.rpm \
     && rm google-chrome-stable_current_x86_64.rpm
 
-# Thiết lập user và thư mục
-RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
-    && mkdir -p /home/pptruser/{Downloads,.local/share/applications,.cache/fontconfig,.config,.cache/puppeteer} \
-    && mkdir -p /var/run/dbus /var/run/upower /etc/upower \
+# Setup dbus and system directories
+RUN mkdir -p /var/run/dbus /var/run/upower \
     && dbus-uuidgen > /var/lib/dbus/machine-id \
+    && mkdir -p /etc/upower
+
+# Add user for running Chrome
+RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
+    && mkdir -p /home/pptruser/Downloads \
+    && mkdir -p /home/pptruser/.local/share/applications \
+    && mkdir -p /home/pptruser/.cache/fontconfig \
+    && mkdir -p /home/pptruser/.config \
     && chown -R pptruser:pptruser /home/pptruser \
+    && chmod -R 755 /home/pptruser
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Add puppeteer configuration
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+ENV PUPPETEER_NO_SANDBOX=true
+ENV DISPLAY=:99
+ENV HOME=/home/pptruser
+
+# Create cache directory and set permissions
+RUN mkdir -p /home/pptruser/.cache/puppeteer \
+    && chown -R pptruser:pptruser /home/pptruser/.cache \
+    && chown -R pptruser:pptruser /app \
     && chown -R pptruser:pptruser /var/run/dbus \
     && chown -R pptruser:pptruser /var/run/upower \
     && chown -R pptruser:pptruser /etc/upower \
-    && chmod -R 755 /home/pptruser \
     && chmod -R 755 /var/run/dbus \
     && chmod -R 755 /var/run/upower \
     && chmod -R 755 /etc/upower
 
-WORKDIR /app
-
-# Set environment variables
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome \
-    PUPPETEER_NO_SANDBOX=true \
-    DISPLAY=:99 \
-    HOME=/home/pptruser \
-    PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
-
-# Copy package files và cài đặt dependencies
-COPY package*.json ./
-RUN npm ci --only=production --legacy-peer-deps \
-    && npm cache clean --force
-
-# Copy source code và build
-COPY . .
-RUN npm run build \
-    && chown -R pptruser:pptruser /app
-
 # Switch to pptruser
 USER pptruser
+
+# Update Puppeteer cache path for pptruser
+ENV PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
 
 # Expose port
 EXPOSE 8000
 
-# Start application
-CMD ["sh", "-c", "dbus-daemon --system --nofork & upowerd & Xvfb :99 -screen 0 1024x768x16 & npm run start:prod"]
+# Start application with system services and Xvfb
+CMD ["sh", "-c", "dbus-daemon --system --nofork & upowerd & Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]
