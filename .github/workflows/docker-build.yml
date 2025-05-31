@@ -66,15 +66,18 @@ jobs:
           chmod 600 ~/.ssh/key
           echo -e "Host ec2\n\tHostName $EC2_HOST\n\tUser $EC2_USERNAME\n\tIdentityFile ~/.ssh/key\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile=/dev/null" > ~/.ssh/config
 
-      - name: Prepare Deployment Files
+      - name: Deploy to EC2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           # Create deployment directory
           mkdir -p deploy
           cd deploy
           
           # Create docker-compose.yml
-          cat > docker-compose.yml << 'EOFDC'
+          cat > docker-compose.yml << 'EOF'
           version: '3.8'
           
           services:
@@ -84,25 +87,8 @@ jobs:
               restart: unless-stopped
               ports:
                 - "8000:8000"
-              environment:
-                - NODE_ENV=production
-                - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-                - PUPPETEER_NO_SANDBOX=true
-                - DISPLAY=:99
-                - DATABASE_HOST=${DATABASE_HOST}
-                - DATABASE_PORT=${DATABASE_PORT}
-                - DATABASE_USERNAME=${DATABASE_USERNAME}
-                - DATABASE_PASSWORD=${DATABASE_PASSWORD}
-                - DATABASE_NAME=${DATABASE_NAME}
-                - JWT_SECRET=${JWT_SECRET}
-                - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-                - JWT_EXPIRATION=${JWT_EXPIRATION}
-                - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
-                - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-                - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-                - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-                - PORT=${PORT}
-                - FRONTEND_URL=${FRONTEND_URL}
+              env_file:
+                - .env
               security_opt:
                 - seccomp=unconfined
               cap_add:
@@ -169,54 +155,10 @@ jobs:
           
           volumes:
             nginx-cache:
-          EOFDC
-          
-          # Create .env file
-          cat > .env << 'EOFENV'
-          DATABASE_HOST=${DATABASE_HOST}
-          DATABASE_PORT=${DATABASE_PORT}
-          DATABASE_USERNAME=${DATABASE_USERNAME}
-          DATABASE_PASSWORD=${DATABASE_PASSWORD}
-          DATABASE_NAME=${DATABASE_NAME}
-          JWT_SECRET=${JWT_SECRET}
-          JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-          JWT_EXPIRATION=${JWT_EXPIRATION}
-          JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
-          GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-          GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-          GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-          PORT=${PORT}
-          NODE_ENV=production
-          FRONTEND_URL=${FRONTEND_URL}
-          DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-          EOFENV
+          EOF
           
           # Copy nginx configuration
           cp -r ../nginx .
-
-      - name: Deploy to EC2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
-          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
-          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
-          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
-          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
-          JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
-          JWT_REFRESH_EXPIRATION: ${{ secrets.JWT_REFRESH_EXPIRATION }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
-          PORT: ${{ secrets.PORT }}
-          NODE_ENV: production
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-        run: |
-          # Copy deployment files to EC2
-          cd deploy
-          envsubst < .env > .env.tmp && mv .env.tmp .env
-          envsubst < docker-compose.yml > docker-compose.yml.tmp && mv docker-compose.yml.tmp docker-compose.yml
           
           echo "Copying files to EC2..."
           ssh ec2 "mkdir -p ~/monkid_management"
@@ -237,15 +179,16 @@ jobs:
             # Create network if it doesn't exist
             docker network create monkids-network 2>/dev/null || true
             
-            # Create required directories
-            mkdir -p data /tmp/.X11-unix
-            chmod 1777 /tmp/.X11-unix
+            # Create required directories with sudo
+            sudo mkdir -p /tmp/.X11-unix
+            sudo chmod 1777 /tmp/.X11-unix
+            mkdir -p data
             
             # Verify docker-compose config
             docker-compose config
             
             # Pull and start services
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
             docker-compose pull --quiet
             docker-compose up -d
             
