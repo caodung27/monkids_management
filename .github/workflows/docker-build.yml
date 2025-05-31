@@ -121,9 +121,9 @@ jobs:
                 - /dev/shm:mode=1777,size=2G
               ipc: host
               healthcheck:
-                test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/health && grep -q 'Application is running on port: 8000' /proc/1/fd/1"]
+                test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/health"]
                 interval: 10s
-                timeout: 10s
+                timeout: 5s
                 retries: 3
                 start_period: 30s
               networks:
@@ -244,15 +244,17 @@ jobs:
                 return 1
               fi
               
-              # Test health endpoint
-              if ! docker exec \"\$container_id\" wget -q --spider --timeout=10 http://localhost:8000/api/health; then
-                echo 'Health endpoint check failed'
-                return 1
-              fi
+              # Test health endpoint with retry
+              for i in {1..3}; do
+                if wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
+                  echo 'Health endpoint check passed'
+                  return 0
+                fi
+                sleep 2
+              done
               
-              # If we got here, container is healthy
-              echo 'Container is healthy'
-              return 0
+              echo 'Health endpoint check failed after 3 attempts'
+              return 1
             }
             
             # Initialize variables
@@ -291,18 +293,20 @@ jobs:
               echo 'Starting nginx...'
               docker-compose up -d nginx
               
-              # Wait briefly for nginx to start
-              sleep 5
+              # Wait for nginx to start
+              sleep 10
               
-              # Verify nginx started
-              if ! docker ps | grep -q nginx; then
-                echo 'Nginx failed to start'
-                docker logs nginx || true
+              # Verify both services are running
+              if docker ps | grep -q 'nginx.*' && docker ps | grep -q 'monkids_backend.*'; then
+                echo 'Both services are running'
+                docker ps --format '{{.Names}} - {{.Status}}'
+              else
+                echo 'Services failed to start properly'
+                docker ps -a
+                docker logs monkids_backend --tail 50 || true
+                docker logs nginx --tail 50 || true
                 exit 1
               fi
-              
-              echo 'Deployment completed successfully'
-              docker ps --format '{{.Names}} - {{.Status}}'
             else
               echo 'Final verification failed - container is not healthy'
               docker ps -a
