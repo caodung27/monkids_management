@@ -23,8 +23,29 @@ jobs:
             
             echo "Starting deployment..."
             WORKSPACE_DIR=/home/${{ secrets.EC2_USERNAME }}/monkids_management
+            BACKUP_BASE_DIR=~/backups
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            BACKUP_DIR=${BACKUP_BASE_DIR}/backup_${TIMESTAMP}
             
-            # Quick setup/update
+            # Create backup directory structure
+            mkdir -p $BACKUP_DIR/{env,data,docker}
+            
+            # Backup existing configuration and data
+            echo "Creating backup..."
+            if [ -d "$WORKSPACE_DIR" ]; then
+              # Backup environment files
+              find $WORKSPACE_DIR -name '.env*' -exec cp --parents {} $BACKUP_DIR/env/ \;
+              
+              # Backup docker volumes (if any)
+              if [ -d "$WORKSPACE_DIR/backend/data" ]; then
+                cp -r $WORKSPACE_DIR/backend/data $BACKUP_DIR/data/
+              fi
+              
+              # Export running containers config
+              docker-compose -f $WORKSPACE_DIR/backend/docker-compose.yml config > $BACKUP_DIR/docker/docker-compose.yml
+            fi
+            
+            # Setup or update workspace
             if [ ! -d "$WORKSPACE_DIR" ]; then
               git clone --depth 1 --single-branch --branch main https://github.com/caodung27/monkids_management.git $WORKSPACE_DIR
             fi
@@ -34,65 +55,85 @@ jobs:
             git fetch --prune --quiet
             git reset --hard origin/main
             
-            # Create minimal backup
-            timestamp=$(date +%Y%m%d_%H%M%S)
-            backup_dir=~/backups/backup_${timestamp}
-            mkdir -p $backup_dir
-            if [ -f "backend/.env" ]; then
-              cp backend/.env $backup_dir/
-            fi
-            
             cd backend
             
-            # Stop and cleanup in parallel
-            echo "Stopping services and cleaning up..."
-            docker-compose down --remove-orphans
-            docker system prune -af --volumes
+            # Stop services gracefully
+            echo "Stopping services..."
+            docker-compose down --remove-orphans --timeout 30
             
-            # Clear Docker build cache
-            docker builder prune -af
+            # Cleanup while preserving build cache
+            echo "Cleaning up..."
+            docker system prune -f --filter "until=24h"
             
-            # Build with optimizations
+            # Optimize Docker build
             echo "Building services..."
             DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build \
               --build-arg BUILDKIT_INLINE_CACHE=1 \
-              --parallel
+              --parallel \
+              --compress
             
-            # Start services
+            # Restore configuration if needed
+            if [ -f "$BACKUP_DIR/env/backend/.env" ]; then
+              cp $BACKUP_DIR/env/backend/.env ./
+            fi
+            
+            # Start services with health checks
             echo "Starting services..."
             docker-compose up -d
             
-            # Optimized health check
-            echo "Starting health check..."
-            MAX_RETRIES=3
-            RETRY_INTERVAL=10
+            # Enhanced health check
+            echo "Performing health checks..."
+            MAX_RETRIES=5
+            RETRY_INTERVAL=20
             RETRY_COUNT=0
             
-            until [ "$(docker inspect --format='{{.State.Health.Status}}' $(docker-compose ps -q backend))" = "healthy" ] || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
-              if [ "$(docker inspect --format='{{.State.Status}}' $(docker-compose ps -q backend))" != "running" ]; then
-                echo "Container failed to start. Logs:"
-                docker-compose logs --tail=50 backend
-                if [ -d "$backup_dir" ]; then
-                  echo "Rolling back..."
-                  cp $backup_dir/.env . 2>/dev/null || true
-                  docker-compose up -d
-                fi
-                exit 1
+            check_service_health() {
+              local service=$1
+              local container_id=$(docker-compose ps -q $service)
+              
+              if [ -z "$container_id" ]; then
+                echo "Container for $service not found!"
+                return 1
               fi
               
-              echo "Waiting for service... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
+              local status=$(docker inspect --format='{{.State.Health.Status}}' $container_id 2>/dev/null)
+              local running=$(docker inspect --format='{{.State.Status}}' $container_id 2>/dev/null)
+              
+              if [ "$running" != "running" ]; then
+                echo "$service container is not running!"
+                return 1
+              fi
+              
+              if [ "$status" != "healthy" ]; then
+                echo "$service is not healthy yet..."
+                return 1
+              fi
+              
+              return 0
+            }
+            
+            until check_service_health backend && check_service_health nginx || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
+              echo "Waiting for services... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
+              docker-compose logs --tail=20
               sleep $RETRY_INTERVAL
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
             
             if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-              echo "Service failed health check. Logs:"
-              docker-compose logs --tail=50 backend
+              echo "Services failed health check. Rolling back..."
+              docker-compose down --volumes
+              if [ -d "$BACKUP_DIR" ]; then
+                cp $BACKUP_DIR/env/backend/.env . 2>/dev/null || true
+                if [ -d "$BACKUP_DIR/data" ]; then
+                  cp -r $BACKUP_DIR/data/* ./data/
+                fi
+                docker-compose up -d
+              fi
               exit 1
             fi
             
-            # Cleanup old backups (keep last 3)
-            cd ~/backups
-            ls -t | tail -n +4 | xargs rm -rf 2>/dev/null || true
+            # Cleanup old backups (keep last 5)
+            cd $BACKUP_BASE_DIR
+            ls -t | tail -n +6 | xargs rm -rf 2>/dev/null || true
             
             echo "Deployment completed successfully!" 
