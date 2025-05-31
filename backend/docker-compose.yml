@@ -1,13 +1,6 @@
 services:
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - NODE_ENV=${NODE_ENV}
-      cache_from:
-        - backend:latest
-    image: backend:latest
+    image: ${DOCKERHUB_USERNAME}/monkids-backend:latest
     ports:
       - "8000:8000"
     environment:

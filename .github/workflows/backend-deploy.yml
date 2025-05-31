@@ -8,9 +8,34 @@ on:
       - '.github/workflows/backend-deploy.yml'
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:latest,${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend:buildcache,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
     steps:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@master
@@ -18,6 +43,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: |
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN=${{ secrets.DOCKERHUB_TOKEN }}
           script: |
             set -e  # Exit on any error
             
@@ -58,39 +86,34 @@ jobs:
             
             cd backend
             
-            # Setup swap if needed
-            if [ ! -f /swapfile ]; then
-              echo "Setting up swap space..."
-              sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
-              sudo chmod 600 /swapfile
-              sudo mkswap /swapfile
-              sudo swapon /swapfile
-              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+            # Restore .env from backup if it doesn't exist
+            if [ ! -f ".env" ] && [ -f "$BACKUP_DIR/env/backend/.env" ]; then
+              echo "Restoring .env from backup..."
+              cp "$BACKUP_DIR/env/backend/.env" .
             fi
+            
+            # Ensure .env exists
+            if [ ! -f ".env" ]; then
+              echo "Error: .env file not found!"
+              exit 1
+            fi
+            
+            # Add Docker Hub credentials to .env if not present
+            if ! grep -q "DOCKERHUB_USERNAME" .env; then
+              echo "Adding Docker Hub credentials to .env..."
+              echo "DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}" >> .env
+            fi
+            
+            # Login to Docker Hub
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
             
             # Stop services gracefully
             echo "Stopping services..."
             docker-compose down --remove-orphans --timeout 30
             
-            # Cleanup while preserving build cache
-            echo "Cleaning up..."
-            docker system prune -f --filter "until=24h"
-            
-            # Pull existing images for cache
-            echo "Pulling existing images for cache..."
-            docker-compose pull || true
-            
-            # Optimize Docker build
-            echo "Building services..."
-            DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build \
-              --build-arg BUILDKIT_INLINE_CACHE=1 \
-              --parallel \
-              --compress
-            
-            # Restore configuration if needed
-            if [ -f "$BACKUP_DIR/env/backend/.env" ]; then
-              cp $BACKUP_DIR/env/backend/.env ./
-            fi
+            # Pull latest images
+            echo "Pulling latest images..."
+            docker pull ${DOCKERHUB_USERNAME}/monkids-backend:latest
             
             # Start services with health checks
             echo "Starting services..."
@@ -131,21 +154,6 @@ jobs:
             until check_service_health backend && check_service_health nginx || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
               echo "Waiting for services... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
               docker-compose logs --tail=20
-              
-              # Check for specific errors in logs
-              if docker-compose logs backend 2>&1 | grep -q "nest: command not found"; then
-                echo "NestJS CLI not found, attempting to fix..."
-                docker-compose exec -T backend npm i -g @nestjs/cli
-              fi
-              
-              # Check for memory issues
-              if docker-compose logs backend 2>&1 | grep -q "JavaScript heap out of memory"; then
-                echo "Memory issue detected, adjusting Node options..."
-                docker-compose down
-                export NODE_OPTIONS="--max-old-space-size=384"
-                docker-compose up -d
-              fi
-              
               sleep $RETRY_INTERVAL
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
@@ -167,6 +175,9 @@ jobs:
             # Cleanup old backups (keep last 5)
             cd $BACKUP_BASE_DIR
             ls -t | tail -n +6 | xargs rm -rf 2>/dev/null || true
+            
+            # Cleanup old images
+            docker system prune -f --filter "until=24h"
             
             # Print resource usage
             echo "Current resource usage:"
