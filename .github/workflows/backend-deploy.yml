@@ -41,10 +41,35 @@ jobs:
             StrictHostKeyChecking no
           END
 
+      - name: Cleanup EC2 Disk Space
+        run: |
+          ssh ec2 '
+          # Remove unused Docker resources
+          docker system prune -af --volumes
+          
+          # Remove old Docker images except the current running ones
+          docker images -q | xargs -r docker rmi -f
+          
+          # Clean package manager cache
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          
+          # Display disk space after cleanup
+          df -h
+          '
+
       - name: Setup EC2 for Docker
         run: |
-          ssh ec2 'docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p "${{ secrets.DOCKERHUB_TOKEN }}" && \
-          docker pull ${{ env.DOCKER_IMAGE }}'
+          ssh ec2 '
+          # Login to Docker Hub
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin && \
+          
+          # Pull the new image
+          docker pull ${{ env.DOCKER_IMAGE }} || {
+            echo "Failed to pull image. Checking disk space..."
+            df -h
+            exit 1
+          }'
 
       - name: Create backup directory
         run: ssh ec2 'mkdir -p ~/backups'
@@ -148,17 +173,35 @@ jobs:
       - name: Deploy with Docker Compose
         run: |
           ssh ec2 'cd ~/monkid_management && \
+          # Set environment variables
           export DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} && \
           export DOCKER_IMAGE=${{ env.DOCKER_IMAGE }} && \
+          
+          # Stop and remove existing containers
+          docker compose down && \
+          
+          # Clean up any dangling images and volumes
+          docker system prune -f && \
+          
+          # Pull and start new containers
           docker compose pull && \
-          docker compose down backend && \
-          docker compose up -d --force-recreate backend && \
-          docker system prune -f'
+          docker compose up -d --force-recreate backend'
 
-      - name: Verify Deployment
+      - name: Monitor Deployment
         run: |
-          ssh ec2 'docker ps | grep monkids-backend && \
-          docker logs monkids_backend --tail 50'
+          ssh ec2 '
+          # Check disk space
+          echo "Current disk space:"
+          df -h
+          
+          # Check Docker status
+          echo "Docker container status:"
+          docker ps -a
+          
+          # Check container logs
+          echo "Container logs:"
+          docker logs monkids_backend --tail 50 2>&1 || echo "Container logs not available yet"
+          '
 
       - name: Health check
         run: |
