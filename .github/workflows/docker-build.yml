@@ -120,7 +120,6 @@ jobs:
                 interval: 10s
                 timeout: 5s
                 retries: 5
-                start_period: 10s
               networks:
                 - monkids-network
           
@@ -222,12 +221,12 @@ jobs:
               fi
               
               local health_status
-              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
-              echo "Container health status: $health_status"
+              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+              echo "Container health status: ${health_status}"
               
-              if [ "$health_status" = "healthy" ]; then
+              if [ "${health_status}" = "healthy" ]; then
                 return 0
-              elif [ "$health_status" = "starting" ]; then
+              elif [ "${health_status}" = "starting" ]; then
                 # Show application logs to help debug startup
                 echo "Container is still starting. Recent logs:"
                 docker logs --tail 50 monkids_backend || true
@@ -256,6 +255,18 @@ jobs:
               # Exit if max attempts reached
               if [ $attempts -eq $max_attempts ]; then
                 echo "Backend failed to become healthy after $attempts attempts"
+                
+                # Get final container status
+                container_status=$(docker ps -a --filter "name=monkids_backend" --format "{{.Status}}")
+                echo "Final container status: $container_status"
+                
+                # If container is actually healthy but our script failed, don't fail the build
+                final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend)
+                if [ "${final_health}" = "healthy" ]; then
+                  echo "Container is actually healthy, proceeding with deployment"
+                  break
+                fi
+                
                 docker ps -a
                 docker inspect monkids_backend || true
                 exit 1
