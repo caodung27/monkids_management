@@ -29,10 +29,16 @@ export class ExportService {
   }
 
   private async initBrowser() {
-    this.browser = await puppeteer.launch({
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    const options: any = {
       headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome',
-      args: [
+      timeout: 30000,  // 30 seconds timeout
+    };
+
+    if (isProduction) {
+      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome';
+      options.args = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
@@ -40,12 +46,24 @@ export class ExportService {
         '--disable-software-rasterizer',
         '--disable-extensions',
         '--single-process',
-        '--no-zygote'
-      ],
-      env: {
+        '--no-zygote',
+        '--window-size=1920,1080',  // Set window size explicitly
+        '--font-render-hinting=none' // Improve font rendering
+      ];
+      options.env = {
         DISPLAY: ':99'
-      }
-    });
+      };
+      options.pipe = true;  // Use pipe instead of WebSocket
+      options.dumpio = true;  // Print browser logs to stdout/stderr
+    }
+
+    try {
+      this.browser = await puppeteer.launch(options);
+      console.log('Browser launched successfully');
+    } catch (error) {
+      console.error('Failed to launch browser:', error);
+      throw error;
+    }
   }
 
   async onModuleDestroy() {
@@ -56,7 +74,8 @@ export class ExportService {
   }
 
   private async generateImage(html: string, outputPath: string): Promise<void> {
-    if (!this.browser.isConnected()) {
+    if (!this.browser || !this.browser.isConnected()) {
+      console.log('Browser not connected, reinitializing...');
       await this.initBrowser();
     }
 
@@ -68,24 +87,38 @@ export class ExportService {
         deviceScaleFactor: 2,
       });
 
+      await page.setDefaultNavigationTimeout(30000);  // 30 seconds navigation timeout
+      await page.setDefaultTimeout(30000);  // 30 seconds timeout for other operations
+
+      console.log('Setting page content...');
       await page.setContent(html, {
-        waitUntil: ['domcontentloaded', 'networkidle0']
+        waitUntil: ['domcontentloaded', 'networkidle0'],
+        timeout: 30000
       });
 
-      await page.waitForSelector('#qr-img', { timeout: 1000 }).catch(() => {});
+      console.log('Waiting for QR code...');
+      await page.waitForSelector('#qr-img', { timeout: 5000 }).catch((err) => {
+        console.warn('QR code element not found:', err.message);
+      });
 
+      console.log('Taking screenshot...');
       const element = await page.$('#receipt-root');
       if (element) {
         const imagePath = outputPath.endsWith('.png') ? outputPath : `${outputPath}.png`;
-        const options: ScreenshotOptions = {
+        await element.screenshot({
           path: imagePath as `${string}.png`,
           type: 'png',
           omitBackground: true
-        };
-        await element.screenshot(options);
+        });
+        console.log('Screenshot saved:', imagePath);
+      } else {
+        throw new Error('Receipt root element not found');
       }
+    } catch (error) {
+      console.error('Error generating image:', error);
+      throw error;
     } finally {
-      await page.close();
+      await page.close().catch(err => console.error('Error closing page:', err));
     }
   }
 

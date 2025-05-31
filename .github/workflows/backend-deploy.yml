@@ -19,130 +19,73 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Setup workspace if not exists
+            set -e  # Exit on any error
+            
+            echo "Starting deployment..."
             WORKSPACE_DIR=/home/${{ secrets.EC2_USERNAME }}/monkids_management
+            
+            # Quick setup/update
             if [ ! -d "$WORKSPACE_DIR" ]; then
-              echo "Creating workspace directory..."
-              mkdir -p $WORKSPACE_DIR
-              cd $WORKSPACE_DIR
-              git clone https://github.com/caodung27/monkids_management.git .
-            else
-              cd $WORKSPACE_DIR
+              git clone --depth 1 https://github.com/caodung27/monkids_management.git $WORKSPACE_DIR
             fi
-
-            # Ensure we're in a git repository
-            if [ ! -d ".git" ]; then
-              echo "Initializing git repository..."
-              git init
-              git remote add origin https://github.com/caodung27/monkids_management.git
-            fi
-
-            # Create backup directory if not exists
-            mkdir -p ~/backups
-
-            # Navigate to backend directory
-            cd backend
-
-            # Backup current state
+            cd $WORKSPACE_DIR
+            
+            # Optimize git operations
+            git fetch --prune --quiet
+            git reset --hard origin/main
+            
+            # Create minimal backup
             timestamp=$(date +%Y%m%d_%H%M%S)
             backup_dir=~/backups/backup_${timestamp}
             mkdir -p $backup_dir
-
-            # Backup current docker state and configs if they exist
-            if [ -f "docker-compose.yml" ]; then
-              docker-compose ps > $backup_dir/containers_state.txt || true
-              docker-compose config > $backup_dir/docker-compose_config.yml || true
-              cp docker-compose.yml $backup_dir/
+            if [ -f "backend/.env" ]; then
+              cp backend/.env $backup_dir/
             fi
             
-            if [ -f ".env" ]; then
-              cp .env $backup_dir/
-            fi
-
-            # Store current git commit hash
-            current_commit=$(git rev-parse HEAD || echo "no-previous-commit")
-
-            # Fetch and reset to latest changes
-            git fetch origin main
-            git reset --hard origin/main
-
-            # Stop and remove containers
-            docker-compose down || true
-            docker-compose rm -f || true
-
-            # Clean up Docker system
-            docker system prune -f
-            docker system prune -af --volumes
-
-            # Build and start containers with error handling
-            if ! docker-compose build --no-cache; then
-              echo "Build failed, rolling back..."
-              if [ "$current_commit" != "no-previous-commit" ]; then
-                git reset --hard $current_commit
-                docker-compose up -d
-              fi
-              exit 1
-            fi
-
-            if ! docker-compose up -d; then
-              echo "Deployment failed, rolling back..."
-              if [ "$current_commit" != "no-previous-commit" ]; then
-                git reset --hard $current_commit
-                docker-compose up -d
-              fi
-              exit 1
-            fi
-
-            # Health check using Docker healthcheck
+            cd backend
+            
+            # Parallel cleanup
+            docker-compose down --remove-orphans &
+            docker system prune -af --volumes &
+            wait
+            
+            # Build with optimizations
+            DOCKER_BUILDKIT=1 docker-compose build --no-cache --parallel
+            
+            # Start services
+            docker-compose up -d
+            
+            # Optimized health check
             echo "Starting health check..."
-            MAX_RETRIES=30
+            MAX_RETRIES=15  # Reduced from 30
             RETRY_INTERVAL=10
             RETRY_COUNT=0
             
             until [ "$(docker inspect --format='{{.State.Health.Status}}' $(docker-compose ps -q backend))" = "healthy" ] || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
-              echo "Waiting for service to be healthy... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
-              sleep $RETRY_INTERVAL
-              RETRY_COUNT=$((RETRY_COUNT+1))
-
-              # Check if container is running
               if [ "$(docker inspect --format='{{.State.Status}}' $(docker-compose ps -q backend))" != "running" ]; then
-                echo "Container is not running! Checking logs:"
-                docker-compose logs backend --tail=50
-                echo "Rolling back due to container failure..."
-                if [ "$current_commit" != "no-previous-commit" ]; then
-                  git reset --hard $current_commit
+                echo "Container failed to start. Logs:"
+                docker-compose logs --tail=50 backend
+                if [ -d "$backup_dir" ]; then
+                  echo "Rolling back..."
+                  cp $backup_dir/.env . 2>/dev/null || true
                   docker-compose up -d
                 fi
                 exit 1
               fi
+              
+              echo "Waiting for service... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
+              sleep $RETRY_INTERVAL
+              RETRY_COUNT=$((RETRY_COUNT+1))
             done
-
+            
             if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-              echo "Service failed to become healthy. Rolling back to previous version..."
-              echo "Last health check status: $(docker inspect --format='{{.State.Health.Status}}' $(docker-compose ps -q backend))"
-              echo "Container logs:"
-              docker-compose logs backend --tail=100
-              
-              if [ "$current_commit" != "no-previous-commit" ]; then
-                git reset --hard $current_commit
-                docker-compose up -d
-              fi
-              
-              # Cleanup failed deployment backup
-              rm -rf $backup_dir
+              echo "Service failed health check. Logs:"
+              docker-compose logs --tail=50 backend
               exit 1
             fi
-
-            # Verify deployment
-            echo "Container status:"
-            docker-compose ps
-
-            # Print recent logs
-            echo "Recent container logs:"
-            docker-compose logs --tail=50
-
-            # Cleanup old backups (keep last 5)
+            
+            # Cleanup old backups (keep last 3)
             cd ~/backups
-            ls -t | tail -n +6 | xargs rm -rf 2>/dev/null || true
-
+            ls -t | tail -n +4 | xargs rm -rf 2>/dev/null || true
+            
             echo "Deployment completed successfully!" 
