@@ -55,7 +55,7 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
 COPY package*.json ./
 
 # Install dependencies with clean npm cache
-RUN npm ci --only=production --legacy-peer-deps \
+RUN npm install --legacy-peer-deps \
     && npm cache clean --force
 
 # Copy source code
