@@ -66,8 +66,6 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=sha-,format=short
-            type=ref,event=branch
-            type=ref,event=pr
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -94,12 +92,6 @@ jobs:
             IdentityFile ~/.ssh/ec2.key
             StrictHostKeyChecking no
           END
-
-      - name: Copy configuration files to EC2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          scp backend/docker-compose.yml ec2:~/monkid_management/
-          scp -r nginx ec2:~/monkid_management/
 
       - name: Deploy with Docker Compose
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -136,80 +128,76 @@ jobs:
           DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
           EOL
 
-          echo 'Stopping existing containers...'
-          docker-compose down --remove-orphans
+          # Stop and remove containers in parallel
+          docker-compose down --remove-orphans & 
+          sudo systemctl stop nginx &
+          wait
           
-          echo 'Cleaning up Docker system...'
-          docker system prune -f
+          # Clean and prepare in parallel
+          docker system prune -f &
+          sudo mkdir -p /etc/letsencrypt &
+          sudo chown -R $USER:$USER /etc/letsencrypt &
+          docker network create monkids-network || true &
+          wait
           
-          echo 'Setting up directories and permissions...'
-          sudo mkdir -p /etc/letsencrypt
-          sudo chown -R $USER:$USER /etc/letsencrypt
+          # Pull images in parallel
+          docker-compose pull --parallel
           
-          echo 'Creating Docker network...'
-          docker network create monkids-network || true
-          
-          echo 'Pulling new images...'
-          docker-compose pull
-          
-          echo 'Starting backend container...'
+          # Start backend and wait for health
           docker-compose up -d backend
           
-          echo 'Waiting for backend startup...'
-          sleep 15
+          # Check backend health with timeout
+          timeout 10s bash -c '
+            until curl -s http://localhost:8000/api/health > /dev/null; do
+              sleep 1
+            done
+          '
           
-          echo '=== Backend Container Status ==='
-          docker ps -a | grep backend
-          
-          echo '=== Backend Container Logs ==='
-          docker logs monkids_backend --tail 100
-          
-          echo '=== Testing Backend API ==='
-          curl -v http://localhost:8000/api/health || true
-          
-          echo '=== Starting Nginx ==='
-          docker-compose up -d nginx
-          sleep 5
-          
-          echo '=== Nginx Status ==='
-          docker ps -a | grep nginx
-          docker logs nginx
-          
-          echo '=== Network Status ==='
-          docker network inspect monkids-network
-          netstat -tulpn | grep -E ':(80|443|8000)' || true
-          
-          echo '=== Testing HTTPS ==='
-          curl -v -k https://api.monkids.site/api/health || true
+          # Start nginx if backend is healthy
+          if [ $? -eq 0 ]; then
+            docker-compose up -d nginx
+            
+            echo '=== Container Status ==='
+            docker ps -a
+            
+            echo '=== Backend Logs ==='
+            docker logs --tail 20 monkids_backend
+            
+            echo '=== Nginx Logs ==='
+            docker logs --tail 20 nginx
+          else
+            echo 'Backend failed to start'
+            docker logs monkids_backend
+            exit 1
+          fi
           "
 
       - name: Health check
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          MAX_RETRIES=3
+          MAX_RETRIES=2
           RETRY_COUNT=0
-          WAIT_TIME=20
+          WAIT_TIME=10
 
           echo "Starting health check..."
           until ssh ec2 "
             echo '=== Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES ==='
             
-            echo '=== Container Status ==='
-            docker ps -a
+            # Check both endpoints in parallel
+            curl -s http://localhost:8000/api/health > /dev/null &
+            curl -sk https://api.monkids.site/api/health > /dev/null &
+            wait
             
-            echo '=== Backend Container Logs ==='
-            docker logs monkids_backend --tail 50
-            
-            echo '=== Nginx Container Logs ==='
-            docker logs nginx
-            
-            echo '=== Testing Backend API ==='
-            curl -v http://localhost:8000/api/health
-            curl -v -k https://api.monkids.site/api/health || true
-            
-            echo '=== Network Status ==='
-            docker network ls
-            docker network inspect monkids-network
+            if [ $? -eq 0 ]; then
+              echo 'Health check passed'
+              docker ps -a
+              exit 0
+            else
+              echo 'Health check failed'
+              docker logs --tail 20 monkids_backend
+              docker logs --tail 20 nginx
+              exit 1
+            fi
           " || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
             echo "Health check failed. Waiting $WAIT_TIME seconds before retry..."
             sleep $WAIT_TIME
