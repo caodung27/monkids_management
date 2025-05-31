@@ -1,24 +1,46 @@
-FROM node:18-slim
+FROM amazonlinux:2
 
 WORKDIR /app
 
-# Install Chrome dependencies and dbus
-RUN apt-get update \
-    && apt-get install -y wget gnupg dbus dbus-x11 \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list' \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
-    xvfb xauth libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 \
-    libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libnss3 libcups2 libxss1 libxrandr2 \
-    libasound2 libpangocairo-1.0-0 libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# Install Node.js 18
+RUN curl -sL https://rpm.nodesource.com/setup_18.x | bash - \
+    && yum install -y nodejs
 
-# Setup dbus
-RUN mkdir -p /var/run/dbus \
-    && dbus-uuidgen > /var/lib/dbus/machine-id
+# Install Chrome dependencies and system utilities
+RUN yum install -y wget tar xz \
+    && amazon-linux-extras install epel -y \
+    && yum install -y \
+    dbus dbus-x11 \
+    upower \
+    xorg-x11-server-Xvfb \
+    xorg-x11-xauth \
+    libX11 \
+    libXcomposite \
+    libXcursor \
+    libXdamage \
+    libXext \
+    libXi \
+    libXrandr \
+    libXrender \
+    libXtst \
+    libXScrnSaver \
+    pango \
+    at-spi2-atk \
+    gtk3 \
+    alsa-lib \
+    nss \
+    cups-libs \
+    GConf2
+
+# Install Chrome
+RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
+    && yum install -y ./google-chrome-stable_current_x86_64.rpm \
+    && rm google-chrome-stable_current_x86_64.rpm
+
+# Setup dbus and system directories
+RUN mkdir -p /var/run/dbus /var/run/upower \
+    && dbus-uuidgen > /var/lib/dbus/machine-id \
+    && mkdir -p /etc/upower
 
 # Add user for running Chrome
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
@@ -47,7 +69,9 @@ ENV DISPLAY=:99
 RUN mkdir -p /home/pptruser/.cache/puppeteer \
     && chown -R pptruser:pptruser /home/pptruser/.cache \
     && chown -R pptruser:pptruser /app \
-    && chown -R pptruser:pptruser /var/run/dbus
+    && chown -R pptruser:pptruser /var/run/dbus \
+    && chown -R pptruser:pptruser /var/run/upower \
+    && chown -R pptruser:pptruser /etc/upower
 
 # Switch to pptruser
 USER pptruser
@@ -58,5 +82,5 @@ ENV PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
 # Expose port
 EXPOSE 8000
 
-# Start application with Xvfb and dbus
-CMD ["sh", "-c", "dbus-daemon --system & Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]
+# Start application with system services and Xvfb
+CMD ["sh", "-c", "dbus-daemon --system --nofork & upowerd & Xvfb :99 -screen 0 1024x768x16 & google-chrome --version && npm run start:prod"]
