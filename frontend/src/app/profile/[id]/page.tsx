@@ -240,7 +240,7 @@ export default function ProfilePage() {
 
         // Save profile after image upload
         try {
-          const currentUser = await profileApi.getCurrentUser();
+          const currentUser = await authApi.getCurrentUser();
           const userId = currentUser?.id;
           
           if (!userId) {
@@ -299,7 +299,7 @@ export default function ProfilePage() {
     setIsUpdating(true);
 
     try {
-      const currentUser = await profileApi.getCurrentUser();
+      const currentUser = await authApi.getCurrentUser();
       const userId = currentUser?.id;
       
       if (!userId) {

@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           await authApi.refreshToken(refreshToken);
           // After refreshing token, get user data only if we don't have it
           if (!user) {
-            const userData = await profileApi.getCurrentUser();
+            const userData = await authApi.getCurrentUser();
             setUser(userData);
           }
           setIsLoading(false);
@@ -106,7 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // If we have access token but no user data, get it
       if (accessToken && !user) {
         try {
-          const userData = await profileApi.getCurrentUser();
+          const userData = await authApi.getCurrentUser();
           setUser(userData);
           setIsLoading(false);
           return true;
@@ -130,7 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      const response = await authApi.login(email, password);
+      const response = await authApi.login({ email, password });
       
       if (response.access_token) {
         await updateUserInfo();
@@ -210,7 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to fetch and update user info
   const updateUserInfo = async () => {
     try {
-      const userData = await profileApi.getCurrentUser();
+      const userData = await authApi.getCurrentUser();
       setUser(userData);
     } catch (error) {
       console.error('Error updating user info:', error);
