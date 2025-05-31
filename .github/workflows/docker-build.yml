@@ -101,6 +101,8 @@ jobs:
                 - NO_SANDBOX=true
                 - DBUS_SESSION_BUS_ADDRESS=/dev/null
                 - DISPLAY=:99
+                - HOME=/tmp
+              user: root
               security_opt:
                 - seccomp=unconfined
               cap_add:
@@ -218,6 +220,25 @@ jobs:
             attempts=0
             max_attempts=5
             
+            check_container_health() {
+              if ! docker ps | grep -q monkids_backend; then
+                echo "Container is not running"
+                docker ps -a
+                docker logs monkids_backend || true
+                return 1
+              fi
+              
+              local health_status
+              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
+              echo "Container health status: $health_status"
+              
+              if [ "$health_status" = "healthy" ]; then
+                return 0
+              fi
+              
+              return 1
+            }
+            
             while [ $attempts -lt $max_attempts ]
             do
               attempts=$((attempts + 1))
@@ -226,19 +247,7 @@ jobs:
               # Give container time to initialize
               sleep 15
               
-              # Check if container is running first
-              if ! docker ps | grep -q monkids_backend; then
-                echo "Container is not running"
-                docker ps -a
-                docker logs monkids_backend || true
-                exit 1
-              fi
-              
-              # Get container health status
-              status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "error")
-              echo "Container health status: $status"
-              
-              if [ "$status" = "healthy" ]; then
+              if check_container_health; then
                 echo "Backend is healthy!"
                 break
               fi
