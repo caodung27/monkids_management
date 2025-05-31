@@ -89,7 +89,17 @@ jobs:
             set -e
             cd ~/monkid_management
             
-            # Quick environment setup
+            # Stop and remove existing containers
+            docker-compose down --remove-orphans || true
+            docker rm -f monkids_backend nginx || true
+            
+            # Cleanup
+            docker system prune -f --volumes
+            
+            # Create network if it doesn't exist
+            docker network create monkids-network 2>/dev/null || true
+            
+            # Setup environment
             cat > .env << 'EOL'
             DATABASE_HOST=${DATABASE_HOST}
             DATABASE_PORT=${DATABASE_PORT}
@@ -109,31 +119,48 @@ jobs:
             DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
             EOL
             
-            # Parallel cleanup
-            {
-              docker-compose down --remove-orphans
-              sudo systemctl stop nginx
-              docker system prune -f --volumes
-              docker network create monkids-network 2>/dev/null || true
-            } &> /dev/null & wait
-
-            # Pull and start services
+            # Pull latest images
             docker-compose pull --quiet --parallel
             
-            # Start backend with health check
+            # Create required directories with proper permissions
+            docker run --rm -v \$(pwd):/app -w /app node:18-alpine sh -c '
+              mkdir -p /app/.local/share/fonts /app/.local/share/applications
+              chown -R 1000:1000 /app/.local
+            '
+            
+            # Start backend first
             docker-compose up -d backend
-            for i in {1..5}; do
+            
+            # Wait for backend to be healthy
+            echo 'Waiting for backend to be healthy...'
+            for i in {1..30}; do
               if curl -sf http://localhost:8000/api/health >/dev/null; then
+                echo 'Backend is healthy'
                 break
               fi
-              [ $i -eq 5 ] && { echo 'Backend failed to start'; exit 1; }
+              if [ $i -eq 30 ]; then
+                echo 'Backend failed to become healthy'
+                docker logs monkids_backend
+                exit 1
+              fi
               sleep 2
             done
             
-            # Start nginx if backend is healthy
+            # Start nginx only after backend is confirmed healthy
+            echo 'Starting nginx...'
             docker-compose up -d nginx
             
-            # Quick status check
+            # Wait for nginx to start
+            sleep 5
+            
+            # Verify nginx is running
+            if ! docker ps | grep -q nginx; then
+              echo 'Nginx failed to start'
+              docker logs nginx
+              exit 1
+            fi
+            
+            echo 'Deployment completed successfully'
             docker ps --format '{{.Names}} - {{.Status}}'
           "
 
@@ -141,7 +168,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           # Wait for services to be fully ready
-          sleep 5
+          sleep 10
           
           # Try to verify deployment
           for i in {1..3}; do
@@ -151,14 +178,14 @@ jobs:
               # Check backend health
               if ! curl -sf http://localhost:8000/api/health >/dev/null; then
                 echo 'Backend health check failed'
-                docker logs --tail 20 monkids_backend
+                docker logs --tail 50 monkids_backend
                 exit 1
               fi
               
               # Check nginx/https
               if ! curl -sfk https://api.monkids.site/api/health >/dev/null; then
                 echo 'HTTPS health check failed'
-                docker logs --tail 20 nginx
+                docker logs --tail 50 nginx
                 exit 1
               fi
               
@@ -177,11 +204,15 @@ jobs:
                 docker logs --tail 50 monkids_backend
                 echo 'Nginx Logs:'
                 docker logs --tail 50 nginx
+                echo 'Docker Compose Config:'
+                docker-compose config
+                echo 'Network Status:'
+                docker network inspect monkids-network
               "
               echo "Verification failed after 3 attempts"
               exit 1
             }
             
             echo "Waiting before next attempt..."
-            sleep 5
+            sleep 10
           done 
