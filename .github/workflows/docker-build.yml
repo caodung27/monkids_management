@@ -110,11 +110,11 @@ jobs:
                     cpus: '0.5'
                     memory: 1G
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 40s
+                test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+                start_period: 60s
               networks:
                 - monkids-network
           
@@ -196,24 +196,40 @@ jobs:
             # Pull and start services
             docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
             docker-compose pull --quiet
-            docker-compose up -d
             
-            # Wait for backend to be healthy
+            # Start backend first to debug any issues
+            docker-compose up -d backend
+            
+            # Show backend logs immediately
+            echo "Initial backend logs:"
+            docker logs monkids_backend
+            
+            # Wait for backend to be healthy with better logging
             echo 'Waiting for backend to be healthy...'
             for i in {1..30}; do
+              echo "Attempt $i: Checking backend health..."
+              docker ps --format "{{.Names}} - {{.Status}}" | grep monkids_backend || true
+              
               if docker ps | grep -q 'monkids_backend.*healthy'; then
                 echo 'Backend is healthy'
                 break
               fi
-              if [ \$i -eq 30 ]; then
-                echo 'Backend failed to become healthy'
+              
+              if [ $i -eq 30 ]; then
+                echo 'Backend failed to become healthy. Showing logs:'
                 docker logs monkids_backend
+                docker inspect monkids_backend
                 exit 1
               fi
-              echo \"Attempt \$i: Checking backend health...\"
-              docker ps
-              sleep 5
+              
+              # Show recent logs on each attempt
+              echo "Recent backend logs:"
+              docker logs --tail 20 monkids_backend
+              sleep 10
             done
+            
+            # Only start nginx if backend is healthy
+            docker-compose up -d nginx
             
             # Verify nginx is running
             if ! docker ps | grep -q 'nginx.*healthy'; then
