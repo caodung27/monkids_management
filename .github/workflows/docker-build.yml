@@ -272,7 +272,7 @@ jobs:
                 final_health=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null) || true
                 echo "Final health check status: ${final_health}"
                 
-                if [ "${final_health}" = "healthy" ] || echo "${container_status}" | grep -q "(healthy)"; then
+                if [ "${final_health}" = "healthy" ] || docker ps --filter "name=monkids_backend" --format "{{.Status}}" | grep -q "healthy"; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
                 else
