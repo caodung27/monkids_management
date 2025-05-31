@@ -1,140 +1,158 @@
-name: Backend Deployment
+name: Deploy Backend to EC2
 
 on:
   workflow_run:
     workflows: ["Build and Push Docker Image"]
     types:
       - completed
-    branches: [main]
+    branches: [ "main" ]
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
     
     steps:
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          script: |
-            set -e  # Exit on any error
-            
-            echo "Starting deployment..."
-            WORKSPACE_DIR=/home/${{ secrets.EC2_USERNAME }}/monkids_management
-            BACKUP_BASE_DIR=~/backups
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            BACKUP_DIR=${BACKUP_BASE_DIR}/backup_${TIMESTAMP}
-            
-            # Create backup directory
-            mkdir -p $BACKUP_DIR/{env,data}
-            
-            # Backup existing data
-            echo "Creating backup..."
-            if [ -d "$WORKSPACE_DIR" ]; then
-              # Backup environment files
-              find $WORKSPACE_DIR -name '.env*' -exec cp --parents {} $BACKUP_DIR/env/ \;
-              
-              # Backup data directory if exists
-              if [ -d "$WORKSPACE_DIR/backend/data" ]; then
-                cp -r $WORKSPACE_DIR/backend/data $BACKUP_DIR/data/
-              fi
-            fi
-            
-            # Create workspace if not exists
-            if [ ! -d "$WORKSPACE_DIR/backend" ]; then
-              mkdir -p $WORKSPACE_DIR/backend
-            fi
-            cd $WORKSPACE_DIR/backend
-            
-            # Restore or create .env
-            if [ ! -f ".env" ] && [ -f "$BACKUP_DIR/env/backend/.env" ]; then
-              echo "Restoring .env from backup..."
-              cp "$BACKUP_DIR/env/backend/.env" .
-            fi
-            
-            # Ensure .env exists
-            if [ ! -f ".env" ]; then
-              echo "Error: .env file not found!"
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2.key
+          chmod 600 ~/.ssh/ec2.key
+          cat >>~/.ssh/config <<END
+          Host ec2
+            HostName ${{ secrets.EC2_HOST }}
+            User ${{ secrets.EC2_USERNAME }}
+            IdentityFile ~/.ssh/ec2.key
+            StrictHostKeyChecking no
+          END
+
+      - name: Create backup directory
+        run: ssh ec2 'mkdir -p ~/backups'
+
+      - name: Create backup
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          ssh ec2 'cd ~/monkid_management && \
+          if [ -f docker-compose.yml ]; then \
+            cp docker-compose.yml ~/backups/docker-compose_${TIMESTAMP}.yml && \
+            echo "Backup created at ~/backups/docker-compose_${TIMESTAMP}.yml"; \
+          fi'
+
+      - name: Clean old backups
+        run: ssh ec2 'cd ~/backups && ls -t docker-compose_*.yml | tail -n +6 | xargs rm -f || true'
+
+      - name: Update docker-compose.yml
+        run: |
+          cat > docker-compose.yml <<'EOL'
+          version: '3.8'
+          
+          services:
+            backend:
+              image: ${DOCKER_USERNAME}/monkids-backend:latest
+              container_name: monkids_backend
+              restart: unless-stopped
+              ports:
+                - "8000:8000"
+              environment:
+                - NODE_ENV=production
+                - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+                - PUPPETEER_NO_SANDBOX=true
+                - DISPLAY=:99
+              security_opt:
+                - seccomp=unconfined
+              cap_add:
+                - SYS_ADMIN
+              volumes:
+                - ./data:/app/data
+                - /tmp/.X11-unix:/tmp/.X11-unix
+              tmpfs:
+                - /tmp
+              deploy:
+                resources:
+                  limits:
+                    cpus: '1.0'
+                    memory: 2G
+                  reservations:
+                    cpus: '0.5'
+                    memory: 1G
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 40s
+
+            nginx:
+              image: nginx:alpine
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+                - /etc/letsencrypt:/etc/letsencrypt:ro
+                - nginx-cache:/var/cache/nginx
+              tmpfs:
+                - /tmp
+              depends_on:
+                backend:
+                  condition: service_healthy
+              networks:
+                - monkids-network
+              logging:
+                driver: "json-file"
+                options:
+                  max-size: "5m"
+                  max-file: "3"
+              deploy:
+                resources:
+                  limits:
+                    cpus: '0.1'
+                    memory: 128M
+              healthcheck:
+                test: ["CMD", "nginx", "-t"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              restart: unless-stopped
+
+          networks:
+            monkids-network:
+              driver: bridge
+
+          volumes:
+            backend-cache:
+            nginx-cache:
+          EOL
+          scp docker-compose.yml ec2:~/monkid_management/
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh ec2 'cd ~/monkid_management && \
+          docker compose pull && \
+          docker compose up -d && \
+          docker system prune -f'
+
+      - name: Health check
+        run: |
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          until ssh ec2 'curl -f http://localhost:8000/api/health' || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
+            echo "Health check failed. Retrying in 10 seconds..."
+            sleep 10
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          done
+          
+          if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo "Health check failed after $MAX_RETRIES attempts. Rolling back..."
+            LATEST_BACKUP=$(ssh ec2 'cd ~/backups && ls -t docker-compose_*.yml | head -n1')
+            if [ ! -z "$LATEST_BACKUP" ]; then
+              ssh ec2 "cd ~/monkid_management && \
+              cp ~/backups/$LATEST_BACKUP docker-compose.yml && \
+              docker compose pull && \
+              docker compose up -d"
+              exit 1
+            else
+              echo "No backup found for rollback"
               exit 1
             fi
-            
-            # Stop existing containers
-            echo "Stopping services..."
-            docker-compose down --remove-orphans --timeout 30
-            
-            # Pull latest image
-            echo "Pulling latest image..."
-            docker pull ${DOCKER_USERNAME}/monkids-backend:latest
-            
-            # Start services
-            echo "Starting services..."
-            docker-compose up -d
-            
-            # Health check
-            echo "Performing health checks..."
-            MAX_RETRIES=5
-            RETRY_INTERVAL=20
-            RETRY_COUNT=0
-            
-            check_service_health() {
-              local service=$1
-              local container_id=$(docker-compose ps -q $service)
-              
-              if [ -z "$container_id" ]; then
-                echo "Container for $service not found!"
-                return 1
-              fi
-              
-              local status=$(docker inspect --format='{{.State.Health.Status}}' $container_id 2>/dev/null)
-              local running=$(docker inspect --format='{{.State.Status}}' $container_id 2>/dev/null)
-              
-              if [ "$running" != "running" ]; then
-                echo "$service container is not running!"
-                docker-compose logs --tail=50 $service
-                return 1
-              fi
-              
-              if [ "$status" != "healthy" ]; then
-                echo "$service is not healthy yet..."
-                return 1
-              fi
-              
-              return 0
-            }
-            
-            until check_service_health backend || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
-              echo "Waiting for services... Attempt: $((RETRY_COUNT+1))/$MAX_RETRIES"
-              docker-compose logs --tail=20
-              sleep $RETRY_INTERVAL
-              RETRY_COUNT=$((RETRY_COUNT+1))
-            done
-            
-            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-              echo "Services failed health check. Rolling back..."
-              docker-compose logs --tail=100
-              docker-compose down --volumes
-              if [ -d "$BACKUP_DIR" ]; then
-                # Restore from backup
-                cp $BACKUP_DIR/env/backend/.env . 2>/dev/null || true
-                if [ -d "$BACKUP_DIR/data" ]; then
-                  cp -r $BACKUP_DIR/data/* ./data/
-                fi
-                docker-compose up -d
-              fi
-              exit 1
-            fi
-            
-            # Cleanup
-            echo "Cleaning up..."
-            # Keep last 5 backups
-            cd $BACKUP_BASE_DIR
-            ls -t | tail -n +6 | xargs rm -rf 2>/dev/null || true
-            
-            # Cleanup old images
-            docker system prune -f --filter "until=24h"
-            
-            echo "Deployment completed successfully!" 
+          fi 
