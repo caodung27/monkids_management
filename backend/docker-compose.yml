@@ -18,7 +18,22 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
       - PORT=${PORT}
-      - PUPPETEER_EXECUTABLE_PATH=${PUPPETEER_EXECUTABLE_PATH}
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+      - PUPPETEER_NO_SANDBOX=true
+      - PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
+      - DEBUG=puppeteer:*
+      - PUPPETEER_DEBUG=true
+      - NODE_DEBUG=puppeteer
+      - DISPLAY=:99
+    security_opt:
+      - seccomp=unconfined
+    cap_add:
+      - SYS_ADMIN
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - monkids-network
     healthcheck:
@@ -26,6 +41,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    volumes:
+      - ./public:/app/public
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
   nginx:
     image: nginx:alpine
@@ -39,6 +57,11 @@ services:
       - backend
     networks:
       - monkids-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   monkids-network:
