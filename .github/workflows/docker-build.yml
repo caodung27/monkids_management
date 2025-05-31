@@ -115,19 +115,12 @@ jobs:
                 - /run/lock:exec,mode=1777
                 - /dev/shm:mode=1777,size=2G
               ipc: host
-              deploy:
-                resources:
-                  limits:
-                    cpus: '1.0'
-                    memory: 2G
-                  reservations:
-                    cpus: '0.5'
-                    memory: 1G
               healthcheck:
-                test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+                test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/health || exit 1"]
                 interval: 10s
                 timeout: 5s
                 retries: 5
+                start_period: 10s
               networks:
                 - monkids-network
           
@@ -234,6 +227,10 @@ jobs:
               
               if [ "$health_status" = "healthy" ]; then
                 return 0
+              elif [ "$health_status" = "starting" ]; then
+                # Show application logs to help debug startup
+                echo "Container is still starting. Recent logs:"
+                docker logs --tail 50 monkids_backend || true
               fi
               
               return 1
@@ -244,8 +241,8 @@ jobs:
               attempts=$((attempts + 1))
               echo "Health check attempt $attempts/$max_attempts"
               
-              # Give container time to initialize
-              sleep 15
+              # Give container more time to initialize
+              sleep 20
               
               if check_container_health; then
                 echo "Backend is healthy!"
@@ -258,7 +255,7 @@ jobs:
               
               # Exit if max attempts reached
               if [ $attempts -eq $max_attempts ]; then
-                echo "Backend failed to become healthy after $max_attempts attempts"
+                echo "Backend failed to become healthy after $attempts attempts"
                 docker ps -a
                 docker inspect monkids_backend || true
                 exit 1
