@@ -215,6 +215,7 @@ jobs:
             max_attempts=5
             
             check_container_health() {
+              # Check if container exists and is running
               if ! docker ps | grep -q monkids_backend; then
                 echo "Container is not running"
                 docker ps -a
@@ -222,23 +223,17 @@ jobs:
                 return 1
               fi
               
-              # Get health status with proper error handling
-              health_status="unknown"
-              health_status=$(docker inspect monkids_backend --format "{{.State.Health.Status}}" 2>/dev/null) || true
+              # Get health status directly
+              health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
               
               echo "Container health status: ${health_status}"
               
+              # Simple health check
               if [ "${health_status}" = "healthy" ]; then
                 return 0
-              elif [ "${health_status}" = "starting" ]; then
-                echo "Container is still starting. Recent logs:"
-                docker logs --tail 50 monkids_backend || true
-                return 1
-              else
-                echo "Container is in unexpected state: ${health_status}"
-                docker logs --tail 50 monkids_backend || true
-                return 1
               fi
+              
+              return 1
             }
             
             while [ $attempts -lt $max_attempts ]
@@ -263,37 +258,33 @@ jobs:
                 echo "Backend failed to become healthy after $max_attempts attempts"
                 
                 # Do a final health check
-                final_health="unknown"
-                final_health=$(docker inspect monkids_backend --format "{{.State.Health.Status}}" 2>/dev/null) || true
-                echo "Final health check status: ${final_health}"
+                health_status=$(docker inspect --format='{{.State.Health.Status}}' monkids_backend 2>/dev/null || echo "unknown")
+                container_status=$(docker ps --no-trunc | grep monkids_backend | grep -q "healthy" && echo "yes" || echo "no")
                 
-                # Get container status without template syntax
-                container_running=$(docker ps --no-trunc | grep monkids_backend | grep -q "healthy" && echo "yes" || echo "no")
+                echo "Final health check status: ${health_status}"
+                echo "Container running with healthy status: ${container_status}"
                 
-                if [ "${final_health}" = "healthy" ] || [ "${container_running}" = "yes" ]; then
+                if [ "${health_status}" = "healthy" ] || [ "${container_status}" = "yes" ]; then
                   echo "Container is actually healthy, proceeding with deployment"
                   break
                 else
                   echo "Container is not healthy"
-                  echo "Health check status: ${final_health}"
-                  echo "Container running status: ${container_running}"
                   docker ps -a
-                  docker inspect monkids_backend || true
+                  docker logs monkids_backend || true
                   exit 1
                 fi
               fi
             done
             
-            # Verify one last time that the container is truly healthy before proceeding
-            echo "Performing final verification..."
-            if ! check_container_health; then
+            # Final verification
+            if check_container_health; then
+              echo "Backend container is verified healthy and ready for nginx"
+            else
               echo "Final verification failed - container is not healthy"
               docker ps -a
               docker logs monkids_backend || true
               exit 1
             fi
-            
-            echo "Backend container is verified healthy and ready for nginx"
             
             # Only start nginx if backend is healthy
             if [ "$status" = "healthy" ]; then
