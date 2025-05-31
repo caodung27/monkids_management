@@ -2,12 +2,12 @@ FROM amazonlinux:2 as builder
 
 WORKDIR /app
 
-# Install Node.js 16 and build dependencies
-RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
-    && yum install -y nodejs git python3 make gcc-c++ \
+# Install Node.js 20 LTS and specific npm version
+RUN curl -sL https://rpm.nodesource.com/setup_20.x | bash - \
+    && yum install -y nodejs-20.11.1 git python3 make gcc-c++ \
     && yum clean all \
     && rm -rf /var/cache/yum \
-    && npm install -g npm@latest
+    && npm install -g npm@10.2.4
 
 # Copy package files first
 COPY package*.json ./
@@ -15,7 +15,7 @@ COPY package*.json ./
 # Install dependencies with verbose logging and legacy peer deps
 RUN set -x \
     && npm install --verbose --legacy-peer-deps \
-    && npm install -g @nestjs/cli \
+    && npm install -g @nestjs/cli@10.0.0 \
     && npm cache clean --force \
     && npm list -g --depth=0
 
@@ -30,9 +30,9 @@ FROM amazonlinux:2
 
 WORKDIR /app
 
-# Install Node.js and Chrome dependencies in a single layer
-RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
-    && yum install -y nodejs wget \
+# Install Node.js 20 LTS and dependencies
+RUN curl -sL https://rpm.nodesource.com/setup_20.x | bash - \
+    && yum install -y nodejs-20.11.1 wget \
     && amazon-linux-extras install epel -y \
     && yum install -y \
         dbus dbus-x11 \
