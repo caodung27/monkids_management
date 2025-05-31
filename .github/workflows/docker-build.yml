@@ -121,7 +121,7 @@ jobs:
                 - /dev/shm:mode=1777,size=2G
               ipc: host
               healthcheck:
-                test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/health"]
+                test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
                 interval: 10s
                 timeout: 5s
                 retries: 3
@@ -131,7 +131,7 @@ jobs:
           
             nginx:
               image: nginx:alpine
-              container_name: nginx 
+              container_name: nginx
               restart: unless-stopped
               ports:
                 - "80:80"
@@ -147,21 +147,16 @@ jobs:
                   condition: service_healthy
               networks:
                 - monkids-network
-              logging:
-                driver: "json-file"
-                options:
-                  max-size: "5m"
-                  max-file: "3"
+              healthcheck:
+                test: ["CMD", "nginx", "-t"]
+                interval: 10s
+                timeout: 5s
+                retries: 3
               deploy:
                 resources:
                   limits:
                     cpus: '0.1'
                     memory: 128M
-              healthcheck:
-                test: ["CMD", "nginx", "-t"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
           
           networks:
             monkids-network:
@@ -246,7 +241,7 @@ jobs:
               
               # Test health endpoint with retry
               for i in {1..3}; do
-                if wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
+                if curl -sf http://localhost:8000/api/health 2>/dev/null; then
                   echo 'Health endpoint check passed'
                   return 0
                 fi
@@ -293,13 +288,38 @@ jobs:
               echo 'Starting nginx...'
               docker-compose up -d nginx
               
-              # Wait for nginx to start
-              sleep 10
+              # Wait for nginx to start and verify
+              echo 'Waiting for nginx to start...'
+              sleep 5
               
-              # Verify both services are running
-              if docker ps | grep -q 'nginx.*' && docker ps | grep -q 'monkids_backend.*'; then
+              # Check if nginx is running
+              if ! docker ps | grep -q nginx; then
+                echo 'Nginx failed to start'
+                docker logs nginx || true
+                exit 1
+              fi
+              
+              # Verify nginx configuration
+              if ! docker exec nginx nginx -t 2>/dev/null; then
+                echo 'Nginx configuration test failed'
+                docker logs nginx || true
+                exit 1
+              fi
+              
+              # Final check of both services
+              if docker ps | grep -q 'nginx' && docker ps | grep -q 'monkids_backend'; then
                 echo 'Both services are running'
                 docker ps --format '{{.Names}} - {{.Status}}'
+                
+                # Test nginx proxy to backend
+                echo 'Testing nginx proxy to backend...'
+                if curl -sf http://localhost/api/health 2>/dev/null; then
+                  echo 'Nginx proxy test successful'
+                else
+                  echo 'Nginx proxy test failed'
+                  docker logs nginx || true
+                  exit 1
+                fi
               else
                 echo 'Services failed to start properly'
                 docker ps -a
