@@ -55,40 +55,12 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
 
-      - name: Build image
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          load: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Test image
-        run: |
-          docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO }}:${{ github.sha }}
-
-      - name: Push image
-        if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Verify push
-        if: github.event_name != 'pull_request'
-        run: |
-          # Wait a few seconds for the image to be available
-          sleep 10
-          # Try to pull the image we just pushed
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO }}:${{ github.sha }}
-          if [ $? -eq 0 ]; then
-            echo "Image successfully pushed and verified"
-          else
-            echo "Failed to verify pushed image"
-            exit 1 
+          cache-to: type=gha,mode=max 
