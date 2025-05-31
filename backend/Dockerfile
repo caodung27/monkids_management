@@ -8,11 +8,11 @@ RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash - \
     && yum clean all \
     && rm -rf /var/cache/yum
 
-# Copy package files and install dependencies
+# Copy package files
 COPY package*.json ./
 
-# Install dependencies including NestJS CLI
-RUN npm ci --only=production --legacy-peer-deps \
+# Install ALL dependencies including devDependencies for build
+RUN npm install \
     && npm i -g @nestjs/cli \
     && npm cache clean --force
 
