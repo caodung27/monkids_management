@@ -26,14 +26,10 @@ FROM node:16-bullseye-slim
 
 WORKDIR /app
 
-# Install Chrome dependencies
+# Install Chromium and dependencies
 RUN apt-get update \
-    && apt-get install -y wget gnupg \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
-    && apt-get update \
     && apt-get install -y \
-        google-chrome-stable \
+        chromium \
         fonts-ipafont-gothic \
         fonts-wqy-zenhei \
         fonts-thai-tlwg \
@@ -93,7 +89,7 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     XDG_DATA_HOME=/tmp/.local/share \
     XDG_RUNTIME_DIR=/tmp \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     PUPPETEER_NO_SANDBOX=true \
     DISPLAY=:99 \
     HOME=/tmp \
@@ -118,7 +114,7 @@ DBUS_PID=$!\n\
 Xvfb :99 -screen 0 1024x768x16 &\n\
 XVFB_PID=$!\n\
 sleep 2\n\
-google-chrome --version\n\
+chromium --version\n\
 npm run start:prod\n\
 kill $DBUS_PID\n\
 kill $XVFB_PID' > /app/start.sh \

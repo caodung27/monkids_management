@@ -35,7 +35,7 @@ export class ExportService {
     };
 
     if (isProduction) {
-      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome';
+      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
       options.args = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -47,7 +47,7 @@ export class ExportService {
         '--no-first-run',
         '--window-size=1920,1080',
         '--font-render-hinting=none',
-        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,PowerBookmarksSidePanel,UsbDeviceMonitor',
+        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,PowerBookmarksSidePanel,UsbDeviceMonitor,GlobalMediaControls',
         '--disable-dev-tools',
         '--disable-notifications',
         '--disable-background-networking',
@@ -61,10 +61,6 @@ export class ExportService {
         '--disable-breakpad',
         '--disable-ipc-flooding-protection',
         '--disable-renderer-backgrounding',
-        '--metrics-recording-only',
-        '--mute-audio',
-        '--no-default-browser-check',
-        '--safebrowsing-disable-auto-update',
         '--disable-component-update',
         '--disable-domain-reliability',
         '--disable-print-preview',
@@ -73,7 +69,17 @@ export class ExportService {
         '--disable-voice-input',
         '--no-experiments',
         '--no-pings',
-        '--no-proxy-server'
+        '--no-proxy-server',
+        '--force-color-profile=srgb',
+        '--disable-audio-output',
+        '--disable-webgl',
+        '--disable-threaded-scrolling',
+        '--disable-accelerated-2d-canvas',
+        '--disable-accelerated-video-decode',
+        '--disable-gpu-compositing',
+        '--disable-logging',
+        '--disable-remote-fonts',
+        '--disable-reading-from-canvas'
       ];
       options.ignoreDefaultArgs = ['--enable-automation'];
       options.env = {
@@ -83,7 +89,7 @@ export class ExportService {
         DISABLE_DEV_SHM_USAGE: '1'
       };
       options.pipe = true;
-      options.dumpio = true;
+      options.dumpio = false;
     }
 
     try {
