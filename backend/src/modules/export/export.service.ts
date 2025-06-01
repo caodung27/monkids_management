@@ -30,7 +30,7 @@ export class ExportService {
     const isProduction = process.env.NODE_ENV === 'production';
     
     const options: any = {
-      headless: 'new',  // Use new headless mode
+      headless: 'new',
       timeout: 30000,
     };
 
@@ -47,7 +47,6 @@ export class ExportService {
         '--no-first-run',
         '--window-size=1920,1080',
         '--font-render-hinting=none',
-        '--disable-dbus',
         '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
         '--disable-dev-tools',
         '--disable-notifications',
@@ -63,10 +62,7 @@ export class ExportService {
       options.ignoreDefaultArgs = ['--enable-automation'];
       options.env = {
         ...process.env,
-        DISPLAY: ':99',
-        DBUS_SESSION_BUS_ADDRESS: '/dev/null',
-        NO_PROXY: 'localhost,127.0.0.1',
-        DISABLE_DBUS: '1'
+        DISPLAY: ':99'
       };
       options.pipe = true;
       options.dumpio = true;

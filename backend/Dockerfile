@@ -40,6 +40,7 @@ RUN apt-get update \
         fonts-kacst \
         fonts-freefont-ttf \
         libxss1 \
+        dbus \
         xvfb \
         libxtst6 \
         fontconfig \
@@ -64,16 +65,22 @@ RUN apt-get update \
     && mkdir -p /tmp/.config \
     && mkdir -p /usr/share/fonts/local \
     && mkdir -p /var/cache/fontconfig \
+    && mkdir -p /var/run/dbus \
+    && mkdir -p /run/dbus \
     && chown -R root:root /tmp/.local \
     && chown -R root:root /tmp/.cache \
     && chown -R root:root /tmp/.config \
     && chown -R root:root /usr/share/fonts/local \
     && chown -R root:root /var/cache/fontconfig \
+    && chown -R messagebus:messagebus /var/run/dbus \
+    && chown -R messagebus:messagebus /run/dbus \
     && chmod -R 777 /tmp/.local \
     && chmod -R 777 /tmp/.cache \
     && chmod -R 777 /tmp/.config \
     && chmod -R 755 /usr/share/fonts/local \
-    && chmod -R 755 /var/cache/fontconfig
+    && chmod -R 755 /var/cache/fontconfig \
+    && chmod -R 755 /var/run/dbus \
+    && chmod -R 755 /run/dbus
 
 # Copy only necessary files from builder
 COPY --from=builder /app/dist ./dist
@@ -94,8 +101,7 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     NODE_ENV=production \
     PUPPETEER_CACHE_DIR=/tmp/.cache/puppeteer \
     NODE_OPTIONS="--max-old-space-size=512" \
-    DBUS_SESSION_BUS_ADDRESS=/dev/null \
-    DISABLE_DBUS=1
+    DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
 
 # Set final permissions
 RUN chown -R root:root /app \
@@ -106,12 +112,18 @@ EXPOSE 8000
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
+rm -f /var/run/dbus/pid\n\
+rm -f /run/dbus/pid\n\
+dbus-daemon --system --nopidfile &\n\
+DBUS_PID=$!\n\
 Xvfb :99 -screen 0 1024x768x16 &\n\
 XVFB_PID=$!\n\
+sleep 2\n\
 google-chrome --version\n\
 npm run start:prod\n\
+kill $DBUS_PID\n\
 kill $XVFB_PID' > /app/start.sh \
     && chmod +x /app/start.sh
 
-# Start application with Xvfb
+# Start application with Xvfb and DBus
 CMD ["/app/start.sh"]
