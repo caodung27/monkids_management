@@ -112,12 +112,12 @@ jobs:
           fi
           
           # Copy nginx configuration
-          mkdir -p nginx
+          mkdir -p nginx/conf.d
           if [ ! -f ../nginx/default.conf ]; then
             echo "Error: default.conf not found"
             exit 1
           fi
-          cp ../nginx/default.conf nginx/
+          cp ../nginx/default.conf nginx/conf.d/
           cp ../nginx/Dockerfile nginx/
           
           # Create data directory
