@@ -85,9 +85,8 @@ jobs:
           echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true" >> .env
           echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome" >> .env
           echo "PUPPETEER_NO_SANDBOX=true" >> .env
-          echo "DISPLAY=:99" >> .env
           echo "CHROME_PATH=/usr/bin/google-chrome" >> .env
-          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-dbus" >> .env
+          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-dbus --headless" >> .env
           
           # Append existing env if available
           if [ -f ../backend/.env ]; then
@@ -131,10 +130,6 @@ jobs:
             mkdir -p data
             mkdir -p /tmp/.local/share/applications
             touch /tmp/.local/share/applications/mimeapps.list
-            
-            # Create Chrome specific directories
-            mkdir -p /tmp/.X11-unix
-            chmod 1777 /tmp/.X11-unix
             
             echo 'Checking configuration files...'
             if [ ! -f nginx/nginx.conf ]; then
