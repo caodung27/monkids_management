@@ -40,13 +40,23 @@ RUN apt-get update \
         fonts-kacst \
         fonts-freefont-ttf \
         libxss1 \
-        dbus \
-        dbus-x11 \
         xvfb \
         libxtst6 \
         fontconfig \
+        libgbm1 \
+        libnss3 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libglu1-mesa \
+        libasound2 \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /var/run/dbus \
     && mkdir -p /tmp/.local/share/applications \
     && touch /tmp/.local/share/applications/mimeapps.list \
     && mkdir -p /tmp/.cache/fontconfig \
@@ -63,13 +73,7 @@ RUN apt-get update \
     && chmod -R 777 /tmp/.cache \
     && chmod -R 777 /tmp/.config \
     && chmod -R 755 /usr/share/fonts/local \
-    && chmod -R 755 /var/cache/fontconfig \
-    && chmod -R 777 /var/run/dbus \
-    && dbus-uuidgen > /etc/machine-id \
-    && mkdir -p /var/run/dbus \
-    && chown -R root:root /var/run/dbus \
-    && chmod -R 777 /var/run/dbus \
-    && dbus-daemon --system --fork --nopidfile
+    && chmod -R 755 /var/cache/fontconfig
 
 # Copy only necessary files from builder
 COPY --from=builder /app/dist ./dist
@@ -90,11 +94,11 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     NODE_ENV=production \
     PUPPETEER_CACHE_DIR=/tmp/.cache/puppeteer \
     NODE_OPTIONS="--max-old-space-size=512" \
-    DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+    DBUS_SESSION_BUS_ADDRESS=/dev/null \
+    DISABLE_DBUS=1
 
 # Set final permissions
-RUN mkdir -p /var/run/dbus \
-    && chown -R root:root /app \
+RUN chown -R root:root /app \
     && chmod -R 755 /app
 
 # Expose port
@@ -102,15 +106,12 @@ EXPOSE 8000
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
-dbus-daemon --system --nopidfile --nofork &\n\
-DBUS_PID=$!\n\
 Xvfb :99 -screen 0 1024x768x16 &\n\
 XVFB_PID=$!\n\
 google-chrome --version\n\
 npm run start:prod\n\
-kill $DBUS_PID\n\
 kill $XVFB_PID' > /app/start.sh \
     && chmod +x /app/start.sh
 
-# Start application with system services and Xvfb
+# Start application with Xvfb
 CMD ["/app/start.sh"]
