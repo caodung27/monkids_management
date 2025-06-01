@@ -92,7 +92,7 @@ jobs:
           # Add system environment variables
           echo "DBUS_SESSION_BUS_ADDRESS=/dev/null" >> .env
           echo "NO_PROXY=localhost,127.0.0.1" >> .env
-          echo "XAUTHORITY=/tmp/.Xauthority" >> .env
+          echo "TMPDIR=/home/ec2-user/monkid_management/tmp" >> .env
           echo "TERM=xterm" >> .env
           
           # Append existing env if available
@@ -135,13 +135,13 @@ jobs:
             
             # Create required directories and files
             mkdir -p data
-            mkdir -p /tmp/.local/share/applications
-            touch /tmp/.local/share/applications/mimeapps.list
-            touch /tmp/.Xauthority
+            mkdir -p tmp/.local/share/applications
+            mkdir -p tmp/.X11-unix
+            touch tmp/.local/share/applications/mimeapps.list
+            touch tmp/.Xauthority
             
-            # Set proper permissions
-            chmod 1777 /tmp
-            chmod 600 /tmp/.Xauthority
+            # Set proper permissions for our own directories
+            chmod -R 777 tmp
             
             echo 'Checking configuration files...'
             if [ ! -f nginx/nginx.conf ]; then
