@@ -86,14 +86,17 @@ jobs:
           echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome" >> .env
           echo "PUPPETEER_NO_SANDBOX=true" >> .env
           echo "CHROME_PATH=/usr/bin/google-chrome" >> .env
-          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --headless --disable-setuid-sandbox --no-zygote --disable-dbus --disable-notifications --disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints" >> .env
-          echo "PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --disable-extensions" >> .env
+          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --headless=new --disable-setuid-sandbox --no-zygote --disable-dbus --disable-notifications --disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints --disable-dev-tools" >> .env
+          echo "PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --disable-extensions --disable-dbus --disable-dev-tools" >> .env
           
           # Add system environment variables
           echo "DBUS_SESSION_BUS_ADDRESS=/dev/null" >> .env
           echo "NO_PROXY=localhost,127.0.0.1" >> .env
           echo "TMPDIR=/home/ec2-user/monkid_management/tmp" >> .env
           echo "TERM=xterm" >> .env
+          echo "DISABLE_DBUS=true" >> .env
+          echo "DISPLAY=:99" >> .env
+          echo "CHROME_CUSTOM_TMPDIR=/home/ec2-user/monkid_management/tmp/chrome" >> .env
           
           # Append existing env if available
           if [ -f ../backend/.env ]; then
@@ -137,6 +140,7 @@ jobs:
             mkdir -p data
             mkdir -p tmp/.local/share/applications
             mkdir -p tmp/.X11-unix
+            mkdir -p tmp/chrome
             touch tmp/.local/share/applications/mimeapps.list
             touch tmp/.Xauthority
             
