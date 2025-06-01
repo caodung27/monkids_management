@@ -112,12 +112,12 @@ jobs:
           fi
           
           # Copy nginx configuration
-          mkdir -p nginx
+          mkdir -p nginx/conf.d
           if [ ! -f ../nginx/default.conf ]; then
             echo "Error: default.conf not found"
             exit 1
           fi
-          cp ../nginx/default.conf nginx/default.conf
+          cp ../nginx/default.conf nginx/conf.d/default.conf
           
           # Create data directory
           mkdir -p data
@@ -148,7 +148,7 @@ jobs:
             chmod -R 777 tmp
             
             echo 'Checking configuration files...'
-            if [ ! -f nginx/default.conf ]; then
+            if [ ! -f nginx/conf.d/default.conf ]; then
               echo 'Error: default.conf not found'
               ls -la nginx/
               exit 1
