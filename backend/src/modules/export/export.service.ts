@@ -32,6 +32,7 @@ export class ExportService {
     const options: any = {
       headless: 'new',
       timeout: 30000,
+      product: 'chrome',
     };
 
     if (isProduction) {
@@ -86,13 +87,19 @@ export class ExportService {
         ...process.env,
         DISPLAY: ':99',
         DISABLE_SETUID_SANDBOX: '1',
-        DISABLE_DEV_SHM_USAGE: '1'
+        DISABLE_DEV_SHM_USAGE: '1',
+        CHROME_PATH: '/usr/bin/chromium',
+        CHROMIUM_PATH: '/usr/bin/chromium'
       };
       options.pipe = true;
       options.dumpio = false;
     }
 
     try {
+      console.log('Launching browser with options:', {
+        executablePath: options.executablePath,
+        env: options.env
+      });
       this.browser = await puppeteer.launch(options);
       console.log('Browser launched successfully');
     } catch (error) {

@@ -30,6 +30,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y \
         chromium \
+        chromium-sandbox \
         fonts-ipafont-gothic \
         fonts-wqy-zenhei \
         fonts-thai-tlwg \
@@ -75,7 +76,8 @@ RUN apt-get update \
     && chmod -R 755 /usr/share/fonts/local \
     && chmod -R 755 /var/cache/fontconfig \
     && chmod -R 755 /var/run/dbus \
-    && chmod -R 755 /run/dbus
+    && chmod -R 755 /run/dbus \
+    && ln -s /usr/bin/chromium /usr/bin/google-chrome
 
 # Copy only necessary files from builder
 COPY --from=builder /app/dist ./dist
@@ -90,6 +92,8 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     XDG_RUNTIME_DIR=/tmp \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    CHROME_PATH=/usr/bin/chromium \
+    CHROMIUM_PATH=/usr/bin/chromium \
     PUPPETEER_NO_SANDBOX=true \
     DISPLAY=:99 \
     HOME=/tmp \
