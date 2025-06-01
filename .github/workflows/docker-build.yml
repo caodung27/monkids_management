@@ -89,6 +89,12 @@ jobs:
           echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --headless --disable-setuid-sandbox --no-zygote --disable-dbus --disable-notifications --disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints" >> .env
           echo "PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --disable-extensions" >> .env
           
+          # Add system environment variables
+          echo "DBUS_SESSION_BUS_ADDRESS=/dev/null" >> .env
+          echo "NO_PROXY=localhost,127.0.0.1" >> .env
+          echo "XAUTHORITY=/tmp/.Xauthority" >> .env
+          echo "TERM=xterm" >> .env
+          
           # Append existing env if available
           if [ -f ../backend/.env ]; then
             cat ../backend/.env >> .env
@@ -127,10 +133,15 @@ jobs:
             docker rm -f monkids_backend nginx || true
             docker system prune -f --volumes
             
-            # Create required directories
+            # Create required directories and files
             mkdir -p data
             mkdir -p /tmp/.local/share/applications
             touch /tmp/.local/share/applications/mimeapps.list
+            touch /tmp/.Xauthority
+            
+            # Set proper permissions
+            chmod 1777 /tmp
+            chmod 600 /tmp/.Xauthority
             
             echo 'Checking configuration files...'
             if [ ! -f nginx/nginx.conf ]; then
