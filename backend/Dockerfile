@@ -40,7 +40,6 @@ RUN apt-get update \
         fonts-kacst \
         fonts-freefont-ttf \
         libxss1 \
-        dbus \
         xvfb \
         libxtst6 \
         fontconfig \

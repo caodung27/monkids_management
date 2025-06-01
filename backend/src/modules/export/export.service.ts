@@ -47,22 +47,40 @@ export class ExportService {
         '--no-first-run',
         '--window-size=1920,1080',
         '--font-render-hinting=none',
-        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
+        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,PowerBookmarksSidePanel,UsbDeviceMonitor',
         '--disable-dev-tools',
         '--disable-notifications',
         '--disable-background-networking',
         '--disable-default-apps',
         '--disable-sync',
         '--disable-translate',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-client-side-phishing-detection',
+        '--disable-component-extensions-with-background-pages',
+        '--disable-breakpad',
+        '--disable-ipc-flooding-protection',
+        '--disable-renderer-backgrounding',
         '--metrics-recording-only',
         '--mute-audio',
         '--no-default-browser-check',
-        '--safebrowsing-disable-auto-update'
+        '--safebrowsing-disable-auto-update',
+        '--disable-component-update',
+        '--disable-domain-reliability',
+        '--disable-print-preview',
+        '--disable-setuid-sandbox',
+        '--disable-speech-api',
+        '--disable-voice-input',
+        '--no-experiments',
+        '--no-pings',
+        '--no-proxy-server'
       ];
       options.ignoreDefaultArgs = ['--enable-automation'];
       options.env = {
         ...process.env,
-        DISPLAY: ':99'
+        DISPLAY: ':99',
+        DISABLE_SETUID_SANDBOX: '1',
+        DISABLE_DEV_SHM_USAGE: '1'
       };
       options.pipe = true;
       options.dumpio = true;
