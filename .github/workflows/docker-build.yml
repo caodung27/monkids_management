@@ -16,7 +16,8 @@ on:
 
 env:
   REGISTRY: docker.io
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
+  BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
+  NGINX_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-nginx
 
 jobs:
   build-and-deploy:
@@ -41,18 +42,29 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push Backend image
         uses: docker/build-push-action@v5
-        id: docker_build
+        id: docker_build_backend
         with:
           context: ./backend
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.DOCKER_IMAGE }}:latest
+          tags: ${{ env.BACKEND_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
           build-args: |
             NODE_ENV=production
+
+      - name: Build and push Nginx image
+        uses: docker/build-push-action@v5
+        id: docker_build_nginx
+        with:
+          context: ./nginx
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.NGINX_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
 
       - name: Setup SSH
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

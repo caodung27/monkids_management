@@ -58,9 +58,7 @@ services:
       start_period: 40s
 
   nginx:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/monkids-nginx:latest
     container_name: nginx
     ports:
       - "80:80"
