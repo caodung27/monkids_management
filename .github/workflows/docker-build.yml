@@ -81,6 +81,14 @@ jobs:
           echo "NODE_ENV=production" >> .env
           echo "PORT=8000" >> .env
           
+          # Add Chrome/Puppeteer specific configurations
+          echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true" >> .env
+          echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome" >> .env
+          echo "PUPPETEER_NO_SANDBOX=true" >> .env
+          echo "DISPLAY=:99" >> .env
+          echo "CHROME_PATH=/usr/bin/google-chrome" >> .env
+          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-dbus" >> .env
+          
           # Append existing env if available
           if [ -f ../backend/.env ]; then
             cat ../backend/.env >> .env
@@ -123,6 +131,10 @@ jobs:
             mkdir -p data
             mkdir -p /tmp/.local/share/applications
             touch /tmp/.local/share/applications/mimeapps.list
+            
+            # Create Chrome specific directories
+            mkdir -p /tmp/.X11-unix
+            chmod 1777 /tmp/.X11-unix
             
             echo 'Checking configuration files...'
             if [ ! -f nginx/nginx.conf ]; then
@@ -195,7 +207,7 @@ jobs:
             }
             
             attempts=0
-            max_attempts=3
+            max_attempts=5
             
             echo 'Waiting for backend to be healthy...'
             while [ \$attempts -lt \$max_attempts ]
@@ -203,7 +215,7 @@ jobs:
               attempts=\$((attempts + 1))
               echo \"Health check attempt \$attempts/\$max_attempts\"
               
-              sleep 15
+              sleep 30
               
               if check_container_health; then
                 echo 'Backend is healthy!'
@@ -225,11 +237,14 @@ jobs:
             if check_container_health; then
               echo 'Backend container is verified healthy and ready for nginx'
               
+              # Wait a bit more to ensure backend is fully ready
+              sleep 15
+              
               echo 'Starting nginx...'
               DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d nginx
               
               echo 'Waiting for nginx to start...'
-              sleep 10
+              sleep 20
               
               if ! docker ps | grep -q nginx; then
                 echo 'Nginx failed to start'
@@ -237,7 +252,7 @@ jobs:
                 exit 1
               fi
               
-              if ! wget -q --spider http://localhost/api/health 2>/dev/null; then
+              if ! wget -q --spider --timeout=10 http://localhost/api/health 2>/dev/null; then
                 echo 'Nginx is not responding'
                 docker logs nginx || true
                 docker exec nginx nginx -t || true
@@ -249,7 +264,7 @@ jobs:
                 docker ps --format '{{.Names}} - {{.Status}}'
                 
                 echo 'Testing nginx proxy to backend...'
-                if wget -q --spider http://localhost/api/health 2>/dev/null; then
+                if wget -q --spider --timeout=10 http://localhost/api/health 2>/dev/null; then
                   echo 'Nginx proxy test successful'
                 else
                   echo 'Nginx proxy test failed'
