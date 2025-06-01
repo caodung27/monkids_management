@@ -22,15 +22,28 @@ RUN npm run build \
     && npm prune --production --legacy-peer-deps
 
 # Production stage
-FROM node:16-bullseye-slim
+FROM ubuntu:20.04
+
+# Avoid prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Node.js
+RUN apt-get update \
+    && apt-get install -y curl gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@8.19.4
 
 WORKDIR /app
 
-# Install Chromium and dependencies
+# Add Chrome repository and install Chrome
 RUN apt-get update \
+    && apt-get install -y wget \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
+    && apt-get update \
     && apt-get install -y \
-        chromium \
-        chromium-sandbox \
+        google-chrome-stable \
         fonts-ipafont-gothic \
         fonts-wqy-zenhei \
         fonts-thai-tlwg \
@@ -61,23 +74,16 @@ RUN apt-get update \
     && mkdir -p /tmp/.config \
     && mkdir -p /usr/share/fonts/local \
     && mkdir -p /var/cache/fontconfig \
-    && mkdir -p /var/run/dbus \
-    && mkdir -p /run/dbus \
     && chown -R root:root /tmp/.local \
     && chown -R root:root /tmp/.cache \
     && chown -R root:root /tmp/.config \
     && chown -R root:root /usr/share/fonts/local \
     && chown -R root:root /var/cache/fontconfig \
-    && chown -R messagebus:messagebus /var/run/dbus \
-    && chown -R messagebus:messagebus /run/dbus \
     && chmod -R 777 /tmp/.local \
     && chmod -R 777 /tmp/.cache \
     && chmod -R 777 /tmp/.config \
     && chmod -R 755 /usr/share/fonts/local \
-    && chmod -R 755 /var/cache/fontconfig \
-    && chmod -R 755 /var/run/dbus \
-    && chmod -R 755 /run/dbus \
-    && ln -s /usr/bin/chromium /usr/bin/google-chrome
+    && chmod -R 755 /var/cache/fontconfig
 
 # Copy only necessary files from builder
 COPY --from=builder /app/dist ./dist
@@ -91,16 +97,15 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     XDG_DATA_HOME=/tmp/.local/share \
     XDG_RUNTIME_DIR=/tmp \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    CHROME_PATH=/usr/bin/chromium \
-    CHROMIUM_PATH=/usr/bin/chromium \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome \
+    CHROME_PATH=/usr/bin/google-chrome \
+    CHROMIUM_PATH=/usr/bin/google-chrome \
     PUPPETEER_NO_SANDBOX=true \
     DISPLAY=:99 \
     HOME=/tmp \
     NODE_ENV=production \
     PUPPETEER_CACHE_DIR=/tmp/.cache/puppeteer \
-    NODE_OPTIONS="--max-old-space-size=512" \
-    DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+    NODE_OPTIONS="--max-old-space-size=512"
 
 # Set final permissions
 RUN chown -R root:root /app \
@@ -111,18 +116,13 @@ EXPOSE 8000
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
-rm -f /var/run/dbus/pid\n\
-rm -f /run/dbus/pid\n\
-dbus-daemon --system --nopidfile &\n\
-DBUS_PID=$!\n\
 Xvfb :99 -screen 0 1024x768x16 &\n\
 XVFB_PID=$!\n\
 sleep 2\n\
-chromium --version\n\
+google-chrome --version\n\
 npm run start:prod\n\
-kill $DBUS_PID\n\
 kill $XVFB_PID' > /app/start.sh \
     && chmod +x /app/start.sh
 
-# Start application with Xvfb and DBus
+# Start application with Xvfb
 CMD ["/app/start.sh"]

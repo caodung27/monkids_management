@@ -32,11 +32,10 @@ export class ExportService {
     const options: any = {
       headless: 'new',
       timeout: 30000,
-      product: 'chrome',
     };
 
     if (isProduction) {
-      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome';
       options.args = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -82,14 +81,14 @@ export class ExportService {
         '--disable-remote-fonts',
         '--disable-reading-from-canvas'
       ];
-      options.ignoreDefaultArgs = ['--enable-automation'];
+      options.ignoreDefaultArgs = ['--enable-automation', '--enable-blink-features=IdleDetection'];
       options.env = {
         ...process.env,
         DISPLAY: ':99',
         DISABLE_SETUID_SANDBOX: '1',
         DISABLE_DEV_SHM_USAGE: '1',
-        CHROME_PATH: '/usr/bin/chromium',
-        CHROMIUM_PATH: '/usr/bin/chromium'
+        CHROME_PATH: '/usr/bin/google-chrome',
+        CHROMIUM_PATH: '/usr/bin/google-chrome'
       };
       options.pipe = true;
       options.dumpio = false;
@@ -98,10 +97,18 @@ export class ExportService {
     try {
       console.log('Launching browser with options:', {
         executablePath: options.executablePath,
-        env: options.env
+        env: {
+          DISPLAY: options.env.DISPLAY,
+          CHROME_PATH: options.env.CHROME_PATH,
+          CHROMIUM_PATH: options.env.CHROMIUM_PATH
+        }
       });
       this.browser = await puppeteer.launch(options);
       console.log('Browser launched successfully');
+      
+      // Verify browser version
+      const version = await this.browser.version();
+      console.log('Browser version:', version);
     } catch (error) {
       console.error('Failed to launch browser:', error);
       throw error;
