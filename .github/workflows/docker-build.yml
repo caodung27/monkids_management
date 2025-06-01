@@ -299,6 +299,15 @@ jobs:
               docker logs monkids_backend || true
               exit 1
             fi
+            
+            echo 'Network Status:'
+            docker network inspect backend-network || true
+            
+            echo 'Directory Structure:'
+            ls -la
+            
+            echo 'Environment File (without secrets):'
+            cat .env | grep -v -E 'PASSWORD|SECRET|TOKEN'
           "
 
       - name: Verify Deployment
@@ -375,7 +384,7 @@ jobs:
                 docker-compose config
                 
                 echo 'Network Status:'
-                docker network inspect monkids-network
+                docker network inspect backend-network || true
                 
                 echo 'Directory Structure:'
                 ls -la
