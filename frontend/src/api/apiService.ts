@@ -49,8 +49,6 @@ export const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Origin': FRONTEND_URL,
-    'X-Origin': FRONTEND_URL,
     'X-Requested-With': 'XMLHttpRequest'
   }
 });
@@ -62,18 +60,6 @@ axiosInstance.interceptors.request.use(
     const token = TokenService.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Ensure Origin headers are set
-    config.headers.Origin = FRONTEND_URL;
-    config.headers['X-Origin'] = FRONTEND_URL;
-    
-    // Add Referer header
-    if (typeof window !== 'undefined') {
-      config.headers.Referer = window.location.href;
-      // Also set Origin from window.location if available
-      config.headers.Origin = window.location.origin;
-      config.headers['X-Origin'] = window.location.origin;
     }
     
     // Log headers for debugging
