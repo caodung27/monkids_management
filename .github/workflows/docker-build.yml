@@ -18,6 +18,9 @@ env:
   REGISTRY: docker.io
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
   NGINX_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-nginx
+  MAX_RETRIES: 3
+  HEALTH_CHECK_INTERVAL: 30
+  HEALTH_CHECK_TIMEOUT: 10
 
 jobs:
   build-and-deploy:
@@ -94,21 +97,25 @@ jobs:
           echo "PORT=8000" >> .env
           
           # Add Chrome/Puppeteer specific configurations
-          echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true" >> .env
-          echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome" >> .env
-          echo "PUPPETEER_NO_SANDBOX=true" >> .env
-          echo "CHROME_PATH=/usr/bin/google-chrome" >> .env
-          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --headless=new --disable-setuid-sandbox --no-zygote --disable-dbus --disable-notifications --disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints --disable-dev-tools" >> .env
-          echo "PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --disable-extensions --disable-dbus --disable-dev-tools" >> .env
+          {
+            echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true"
+            echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome"
+            echo "PUPPETEER_NO_SANDBOX=true"
+            echo "CHROME_PATH=/usr/bin/google-chrome"
+            echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --headless=new --disable-setuid-sandbox --no-zygote --disable-dbus --disable-notifications --disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints --disable-dev-tools"
+            echo "PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --disable-extensions --disable-dbus --disable-dev-tools"
+          } >> .env
           
           # Add system environment variables
-          echo "DBUS_SESSION_BUS_ADDRESS=/dev/null" >> .env
-          echo "NO_PROXY=localhost,127.0.0.1" >> .env
-          echo "TMPDIR=/home/ec2-user/monkid_management/tmp" >> .env
-          echo "TERM=xterm" >> .env
-          echo "DISABLE_DBUS=true" >> .env
-          echo "DISPLAY=:99" >> .env
-          echo "CHROME_CUSTOM_TMPDIR=/home/ec2-user/monkid_management/tmp/chrome" >> .env
+          {
+            echo "DBUS_SESSION_BUS_ADDRESS=/dev/null"
+            echo "NO_PROXY=localhost,127.0.0.1"
+            echo "TMPDIR=/home/ec2-user/monkid_management/tmp"
+            echo "TERM=xterm"
+            echo "DISABLE_DBUS=true"
+            echo "DISPLAY=:99"
+            echo "CHROME_CUSTOM_TMPDIR=/home/ec2-user/monkid_management/tmp/chrome"
+          } >> .env
           
           # Append existing env if available
           if [ -f ../backend/.env ]; then
@@ -120,13 +127,15 @@ jobs:
             cp ../backend/docker-compose.yml .
           else
             echo "Error: docker-compose.yml not found in backend directory"
+            ls -la ../backend/
             exit 1
           fi
           
           # Copy nginx configuration
           mkdir -p nginx/conf.d
           if [ ! -f ../nginx/default.conf ]; then
-            echo "Error: default.conf not found"
+            echo "Error: default.conf not found in nginx directory"
+            ls -la ../nginx/
             exit 1
           fi
           cp ../nginx/default.conf nginx/conf.d/
@@ -144,50 +153,56 @@ jobs:
             set -ex
             cd ~/monkid_management
             
+            # Function to retry commands
+            retry() {
+              local retries=\${MAX_RETRIES:-3}
+              local count=0
+              until \"\$@\"; do
+                exit=\$?
+                count=\$((count + 1))
+                if [ \$count -lt \$retries ]; then
+                  echo \"Command failed. Attempt \$count/\$retries. Retrying in 5s...\"
+                  sleep 5
+                else
+                  echo \"Command failed after \$retries attempts\"
+                  return \$exit
+                fi
+              done
+              return 0
+            }
+            
             # Stop and remove existing containers
             docker-compose down --remove-orphans || true
             docker rm -f monkids_backend nginx || true
             docker system prune -f --volumes
             
             # Create required directories and files
-            mkdir -p data
-            mkdir -p tmp/.local/share/applications
-            mkdir -p tmp/.X11-unix
-            mkdir -p tmp/chrome
-            touch tmp/.local/share/applications/mimeapps.list
-            touch tmp/.Xauthority
-            
-            # Set proper permissions for our own directories
+            mkdir -p data tmp/{.local/share/applications,.X11-unix,chrome}
+            touch tmp/.local/share/applications/mimeapps.list tmp/.Xauthority
             chmod -R 777 tmp
             
-            echo 'Checking configuration files...'
-            if [ ! -f nginx/default.conf ]; then
-              echo 'Error: default.conf not found'
-              ls -la nginx/
-              exit 1
-            fi
-            if [ ! -f .env ]; then
-              echo 'Error: .env not found'
-              ls -la
-              exit 1
-            fi
-            if [ ! -f docker-compose.yml ]; then
-              echo 'Error: docker-compose.yml not found'
-              ls -la
-              exit 1
-            fi
+            # Verify configuration files
+            for file in nginx/default.conf .env docker-compose.yml; do
+              if [ ! -f \"\$file\" ]; then
+                echo \"Error: \$file not found\"
+                ls -la \$(dirname \"\$file\")
+                exit 1
+              fi
+            done
             
-            echo 'Creating Docker network...'
-            docker network create backend-network || true
+            # Create or verify Docker network
+            if ! docker network inspect backend-network >/dev/null 2>&1; then
+              docker network create backend-network
+            fi
             
             echo 'Verifying docker-compose configuration...'
             DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose config
             
             echo 'Logging into Docker Hub...'
-            docker login -u '$DOCKERHUB_USERNAME' -p '$DOCKERHUB_TOKEN'
+            retry docker login -u '$DOCKERHUB_USERNAME' -p '$DOCKERHUB_TOKEN'
             
             echo 'Pulling images...'
-            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose pull --quiet
+            retry DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose pull --quiet
             
             echo 'Starting backend...'
             DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d backend
@@ -196,9 +211,13 @@ jobs:
             docker logs monkids_backend || true
             
             check_container_health() {
-              container_id=\$(docker ps -qf 'name=^monkids_backend$' 2>/dev/null)
+              local container=\$1
+              local port=\$2
+              local endpoint=\$3
+              
+              container_id=\$(docker ps -qf \"name=^\$container\$\" 2>/dev/null)
               if [ -z \"\$container_id\" ]; then
-                echo 'Container not found'
+                echo \"Container \$container not found\"
                 docker ps -a
                 return 1
               fi
@@ -206,35 +225,37 @@ jobs:
               container_status=\$(docker inspect --format='{{.State.Status}}' \"\$container_id\" 2>/dev/null)
               health_status=\$(docker inspect --format='{{.State.Health.Status}}' \"\$container_id\" 2>/dev/null)
               
-              echo \"Container status: \${container_status:-unknown}, health: \${health_status:-unknown}\"
+              echo \"Container \$container status: \${container_status:-unknown}, health: \${health_status:-unknown}\"
               
               if [ \"\$container_status\" != 'running' ]; then
-                echo \"Container is not running (status: \${container_status:-unknown})\"
+                echo \"Container \$container is not running (status: \${container_status:-unknown})\"
                 docker logs \"\$container_id\" || true
                 return 1
               fi
               
-              if ! docker logs \"\$container_id\" 2>&1 | grep -q 'Application is running on port: 8000'; then
-                echo 'Application startup message not found in logs'
-                docker logs \"\$container_id\" --tail 50 || true
-                return 1
+              if [ \"\$container\" = \"monkids_backend\" ]; then
+                if ! docker logs \"\$container_id\" 2>&1 | grep -q 'Application is running on port: 8000'; then
+                  echo 'Application startup message not found in logs'
+                  docker logs \"\$container_id\" --tail 50 || true
+                  return 1
+                fi
               fi
               
               for i in {1..3}; do
-                if wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
-                  echo 'Health endpoint check passed'
+                if wget -q --spider --timeout=\${HEALTH_CHECK_TIMEOUT:-10} \"\$endpoint\" 2>/dev/null; then
+                  echo \"Health check passed for \$container\"
                   return 0
                 fi
-                echo \"Health check attempt \$i failed, retrying...\"
-                sleep 2
+                echo \"Health check attempt \$i failed for \$container, retrying...\"
+                sleep 5
               done
               
-              echo 'Health endpoint check failed after 3 attempts'
+              echo \"Health check failed for \$container after 3 attempts\"
               return 1
             }
             
             attempts=0
-            max_attempts=5
+            max_attempts=\${MAX_RETRIES:-3}
             
             echo 'Waiting for backend to be healthy...'
             while [ \$attempts -lt \$max_attempts ]
@@ -242,15 +263,12 @@ jobs:
               attempts=\$((attempts + 1))
               echo \"Health check attempt \$attempts/\$max_attempts\"
               
-              sleep 30
+              sleep \${HEALTH_CHECK_INTERVAL:-30}
               
-              if check_container_health; then
+              if check_container_health \"monkids_backend\" 8000 \"http://localhost:8000/api/health\"; then
                 echo 'Backend is healthy!'
                 break
               fi
-              
-              docker ps -a
-              docker inspect monkids_backend --format='{{.State.Health}}' || true
               
               if [ \$attempts -eq \$max_attempts ]; then
                 echo \"Backend failed to become healthy after \$max_attempts attempts\"
@@ -260,81 +278,29 @@ jobs:
               fi
             done
             
-            echo 'Performing final health verification...'
-            if check_container_health; then
-              echo 'Backend container is verified healthy and ready for nginx'
-              
-              # Wait a bit more to ensure backend is fully ready
-              sleep 15
-              
-              echo 'Starting nginx...'
-              DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d nginx
-              
-              echo 'Waiting for nginx to start...'
-              sleep 20
-              
-              echo 'Checking nginx container...'
-              if ! docker ps | grep -q nginx; then
-                echo 'Nginx failed to start'
-                docker logs nginx || true
-                docker inspect nginx || true
-                exit 1
-              fi
-              
-              echo 'Testing nginx configuration...'
-              if ! docker exec nginx nginx -t; then
-                echo 'Nginx configuration test failed'
-                docker logs nginx || true
-                docker exec nginx cat /etc/nginx/conf.d/default.conf || true
-                exit 1
-              fi
-              
-              echo 'Testing nginx connectivity...'
-              if ! wget -q --spider --timeout=10 http://localhost/api/health 2>/dev/null; then
-                echo 'Nginx is not responding'
-                echo 'Network status:'
-                docker network ls
-                docker network inspect monkid_management_backend-network || true
-                echo 'Container status:'
-                docker ps -a
-                echo 'Nginx logs:'
-                docker logs nginx || true
-                echo 'Backend logs:'
-                docker logs monkids_backend || true
-                exit 1
-              fi
-              
-              if docker ps | grep -q 'nginx' && docker ps | grep -q 'monkids_backend'; then
-                echo 'Both services are running'
-                docker ps --format '{{.Names}} - {{.Status}}'
-                
-                echo 'Testing nginx proxy to backend...'
-                if wget -q --spider --timeout=10 http://localhost/api/health 2>/dev/null; then
-                  echo 'Nginx proxy test successful'
-                else
-                  echo 'Nginx proxy test failed'
-                  echo 'Nginx configuration:'
-                  docker exec nginx cat /etc/nginx/conf.d/default.conf || true
-                  echo 'Nginx logs:'
-                  docker logs nginx || true
-                  echo 'Network status:'
-                  docker network ls
-                  docker network inspect monkid_management_backend-network || true
-                  exit 1
-                fi
-              else
-                echo 'Services failed to start properly'
-                docker ps -a
-                docker logs monkids_backend --tail 50 || true
-                docker logs nginx --tail 50 || true
-                exit 1
-              fi
-            else
-              echo 'Final verification failed - container is not healthy'
-              docker ps -a
-              docker logs monkids_backend || true
+            echo 'Starting nginx...'
+            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d nginx
+            
+            echo 'Waiting for nginx to start...'
+            sleep 20
+            
+            if ! check_container_health \"nginx\" 80 \"http://localhost/api/health\"; then
+              echo 'Nginx health check failed'
+              docker logs nginx || true
+              docker exec nginx nginx -t || true
+              docker exec nginx cat /etc/nginx/conf.d/default.conf || true
               exit 1
             fi
+            
+            echo 'Testing HTTPS endpoint...'
+            if ! wget -q --spider --timeout=\${HEALTH_CHECK_TIMEOUT:-10} --no-check-certificate https://api.monkids.site/api/health 2>/dev/null; then
+              echo 'HTTPS endpoint check failed'
+              docker logs nginx || true
+              exit 1
+            fi
+            
+            echo 'All services are running and healthy'
+            docker ps --format '{{.Names}} - {{.Status}}'
             
             echo 'Network Status:'
             docker network ls
@@ -366,27 +332,22 @@ jobs:
                 exit 1
               fi
               
-              # Check backend health
-              if ! docker ps | grep -q 'monkids_backend.*healthy'; then
-                echo 'Backend container is not healthy'
-                docker logs monkids_backend
-                exit 1
-              fi
+              # Check both services
+              for service in monkids_backend nginx; do
+                if ! docker ps | grep -q \"\$service.*healthy\"; then
+                  echo \"\$service container is not healthy\"
+                  docker logs \$service
+                  exit 1
+                fi
+              done
               
+              # Check endpoints
               if ! wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
                 echo 'Backend health check failed'
                 docker logs --tail 50 monkids_backend
                 exit 1
               fi
               
-              # Check nginx health
-              if ! docker ps | grep -q 'nginx.*healthy'; then
-                echo 'Nginx container is not healthy'
-                docker logs nginx
-                exit 1
-              fi
-              
-              # Check HTTPS endpoint
               if ! wget -q --spider --timeout=5 --no-check-certificate https://api.monkids.site/api/health 2>/dev/null; then
                 echo 'HTTPS health check failed'
                 docker logs --tail 50 nginx
@@ -399,7 +360,7 @@ jobs:
               exit 0
             fi
             
-            [ $i -eq 3 ] && { 
+            [ $i -eq 3 ] && {
               echo "=== Final Status ==="
               ssh ec2 "
                 set -ex
