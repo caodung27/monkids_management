@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${DOCKERHUB_USERNAME}/monkids-backend:latest
+    image: ${secrets.DOCKERHUB_USERNAME}/monkids-backend:latest
     container_name: monkids_backend
     restart: unless-stopped
     ports:
@@ -10,24 +10,24 @@ services:
     networks:
       - backend-network
     environment:
-      - NODE_ENV=production
-      - PORT=8000
+      - NODE_ENV=${env.NODE_ENV}
+      - PORT=${env.PORT}
       # Database Configuration
-      - DATABASE_HOST=${DATABASE_HOST}
-      - DATABASE_PORT=${DATABASE_PORT}
-      - DATABASE_USERNAME=${DATABASE_USERNAME}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
-      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_HOST=${env.DATABASE_HOST}
+      - DATABASE_PORT=${env.DATABASE_PORT}
+      - DATABASE_USERNAME=${env.DATABASE_USERNAME}
+      - DATABASE_PASSWORD=${env.DATABASE_PASSWORD}
+      - DATABASE_NAME=${env.DATABASE_NAME}
       # JWT Configuration
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      - JWT_SECRET=${env.JWT_SECRET}
+      - JWT_REFRESH_SECRET=${env.JWT_REFRESH_SECRET}
+      - JWT_EXPIRATION=${env.JWT_EXPIRATION}
       - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
       # Google OAuth2 Configuration
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-      - FRONTEND_URL=${FRONTEND_URL}
+      - GOOGLE_CLIENT_ID=${env.GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${env.GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${env.GOOGLE_CALLBACK_URL}
+      - FRONTEND_URL=${env.FRONTEND_URL}
       # Chrome/Puppeteer Configuration
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
       - PUPPETEER_NO_SANDBOX=true
