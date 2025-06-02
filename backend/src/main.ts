@@ -42,7 +42,21 @@ async function bootstrap() {
       corsLogger.debug(`Effective origin: ${effectiveOrigin}`);
       corsLogger.debug(`Allowed origins: ${allowedOrigins.join(', ')}`);
 
-      if (!effectiveOrigin || allowedOrigins.includes(effectiveOrigin)) {
+      // In development, be more lenient with origins
+      if (process.env.NODE_ENV !== 'production') {
+        corsLogger.debug('Development mode: allowing all origins');
+        callback(null, true);
+        return;
+      }
+
+      // In production, strictly check origins
+      if (!effectiveOrigin) {
+        corsLogger.warn('No origin found in production mode');
+        callback(new Error('Origin required in production mode'));
+        return;
+      }
+
+      if (allowedOrigins.includes(effectiveOrigin)) {
         corsLogger.debug(`Origin ${effectiveOrigin} is allowed`);
         callback(null, true);
       } else {
@@ -59,7 +73,8 @@ async function bootstrap() {
       'X-Origin',
       'X-Requested-With',
       'Access-Control-Request-Method',
-      'Access-Control-Request-Headers'
+      'Access-Control-Request-Headers',
+      'Referer'
     ],
     exposedHeaders: ['Content-Length', 'Content-Range'],
     credentials: true,

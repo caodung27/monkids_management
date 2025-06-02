@@ -41,6 +41,7 @@ const FRONTEND_URL = process.env.NODE_ENV === 'production'
   ? 'https://www.monkids.site' 
   : 'http://localhost:3000';
 
+// Create axios instance with default config
 export const axiosInstance = axios.create({
   baseURL: API_URL,
   timeout: 10000,
@@ -48,7 +49,8 @@ export const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Origin': FRONTEND_URL
+    'Origin': FRONTEND_URL,
+    'X-Origin': FRONTEND_URL
   }
 });
 
@@ -60,8 +62,16 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // Ensure Origin header is set
+    
+    // Ensure Origin headers are set
     config.headers.Origin = FRONTEND_URL;
+    config.headers['X-Origin'] = FRONTEND_URL;
+    
+    // Add Referer header
+    if (typeof window !== 'undefined') {
+      config.headers.Referer = window.location.href;
+    }
+    
     return config;
   },
   (error) => {
