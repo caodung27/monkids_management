@@ -11,11 +11,22 @@ async function bootstrap() {
 
   // CORS configuration for both development and production
   const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? ['https://monkids.site', 'https://www.monkids.site']
+    ? ['https://www.monkids.site']
     : ['http://localhost:3000'];
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      const corsLogger = new Logger('CORS');
+      corsLogger.debug(`Incoming request from origin: ${origin}`);
+      
+      if (!origin || allowedOrigins.includes(origin)) {
+        corsLogger.debug(`Origin ${origin} is allowed`);
+        callback(null, true);
+      } else {
+        corsLogger.warn(`Origin ${origin} is not allowed`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
