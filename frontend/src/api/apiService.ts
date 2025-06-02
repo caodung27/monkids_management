@@ -36,88 +36,47 @@ export const TokenService = {
   }
 };
 
-// Create axios instance with default config
-const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NODE_ENV === 'development' ? '/api' : process.env.NEXT_PUBLIC_API_URL,
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monkids.site';
+
+export const axiosInstance = axios.create({
+  baseURL: API_URL,
+  timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-  },
-  withCredentials: true,
-  timeout: 5000, // 5 seconds timeout
-  validateStatus: (status) => {
-    return status >= 200 && status < 500; // Accept all responses except 5xx errors
-  },
+    'Accept': 'application/json'
+  }
 });
 
-// Add request interceptor to add auth token
-apiClient.interceptors.request.use(
+// Add request interceptor for error handling
+axiosInstance.interceptors.request.use(
   (config) => {
-    const token = TokenService.getAccessToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Add any request preprocessing here
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Add response interceptor to handle token refresh
-apiClient.interceptors.response.use(
+// Add response interceptor for error handling
+axiosInstance.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    // If error is 401 and we haven't tried to refresh token yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        const refreshToken = TokenService.getRefreshToken();
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        // Try to refresh the token
-        const response = await authApi.refreshToken(refreshToken);
-        const { access_token } = response;
-
-        // Update the token
-        TokenService.setAccessToken(access_token);
-
-        // Retry the original request with new token
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        console.error('Token refresh failed:', refreshError);
-        // If refresh fails, clear tokens and redirect to login
-        TokenService.clearTokens();
-        window.location.replace('/login');
-        return Promise.reject(refreshError);
-      }
-    }
-
-    // Handle network errors
+  (error) => {
     if (error.code === 'ERR_NETWORK') {
-      console.error('Network error:', error);
-      throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng của bạn.');
+      return Promise.reject({
+        message: 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng và thử lại sau.',
+        originalError: error
+      });
+    }
+    
+    if (error.response?.status === 401) {
+      // Handle unauthorized access
+      window.location.href = '/login';
+      return Promise.reject(error);
     }
 
-    // Handle timeout errors
-    if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout:', error);
-      throw new Error('Yêu cầu đã hết thời gian chờ. Vui lòng thử lại.');
-    }
-
-    // Handle SSL errors
-    if (error.message?.includes('certificate') || error.message?.includes('SSL')) {
-      console.error('SSL error:', error);
-      throw new Error('Lỗi bảo mật kết nối. Vui lòng thử lại sau.');
-    }
-
-    return Promise.reject(error);
+    return Promise.reject(error?.response?.data || error);
   }
 );
 
@@ -178,7 +137,7 @@ export const checkTokenAndRefreshIfNeeded = async (): Promise<boolean> => {
 export const authApi = {
   getCurrentUser: async () => {
     try {
-      const response = await apiClient.get('/auth/profile');
+      const response = await axiosInstance.get('/auth/profile');
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -186,56 +145,18 @@ export const authApi = {
     }
   },
 
-  login: async (credentials: { email: string; password: string }) => {
+  login: async (credentials: { username: string; password: string }) => {
     try {
-      // Ensure credentials are properly formatted
-      const formData = {
-        email: credentials.email,
-        password: credentials.password
-      };
-
-      const response = await apiClient.post('/auth/login', formData, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const { access_token, user } = response.data;
-      
-      if (access_token) {
-        TokenService.setAccessToken(access_token);
-        // Set user role in cookies
-        document.cookie = `user_role=${user.role};path=/;max-age=86400`;
-        
-        // Handle role-based redirection
-        let redirectTo = '/dashboard';
-        switch (user.role) {
-          case 'USER':
-            redirectTo = '/dashboard/students';
-            break;
-          case 'TEACHER':
-            redirectTo = '/dashboard/teachers';
-            break;
-          case 'ADMIN':
-            redirectTo = '/dashboard';
-            break;
-          default:
-            redirectTo = '/dashboard';
-        }
-        
-        return { access_token, user, redirectTo };
-      }
-
-      return { access_token, user };
-    } catch (error) {
-      handleApiError(error);
-      throw error;
+      const response = await axiosInstance.post('/api/auth/login', credentials);
+      return response.data;
+    } catch (error: any) {
+      throw error?.response?.data || error;
     }
   },
 
   logout: async () => {
     try {
-      const response = await apiClient.post('/auth/logout');
+      const response = await axiosInstance.post('/auth/logout');
       TokenService.clearTokens();
       return response.data;
     } catch (error) {
@@ -254,12 +175,12 @@ export const authApi = {
     role?: string;
     account_type?: string;
   }) => {
-    const response = await apiClient.post('/auth/register', userData);
+    const response = await axiosInstance.post('/auth/register', userData);
     return response.data;
   },
 
   updatePassword: async (oldPassword: string, newPassword: string) => {
-    const response = await apiClient.patch('/auth/update-password', {
+    const response = await axiosInstance.patch('/auth/update-password', {
       oldPassword,
       newPassword
     });
@@ -273,7 +194,7 @@ export const authApi = {
   },
 
   googleCallback: async (code: string) => {
-    const response = await apiClient.get(`/auth/google/callback?code=${code}`);
+    const response = await axiosInstance.get(`/auth/google/callback?code=${code}`);
     const { access_token, user } = response.data;
     TokenService.setAccessToken(access_token);
     return { access_token, user };
@@ -281,7 +202,7 @@ export const authApi = {
 
   getUserPermissions: async () => {
     try {
-      const response = await apiClient.get('/auth/permissions/');
+      const response = await axiosInstance.get('/auth/permissions/');
       return response.data;
     } catch (error) {
       console.error('getUserPermissions: Error', error);
@@ -291,7 +212,7 @@ export const authApi = {
 
   introspectToken: async () => {
     try {
-      const response = await apiClient.post('/auth/token/introspect');
+      const response = await axiosInstance.post('/auth/token/introspect');
       return response.data;
     } catch (error) {
       console.error('introspectToken: Error', error);
@@ -301,7 +222,7 @@ export const authApi = {
 
   verifyToken: async () => {
     try {
-      const response = await apiClient.post('/auth/token/verify');
+      const response = await axiosInstance.post('/auth/token/verify');
       return response.data;
     } catch (error) {
       console.error('verifyToken: Error', error);
@@ -311,7 +232,7 @@ export const authApi = {
 
   refreshToken: async (refreshToken: string) => {
     try {
-      const response = await apiClient.post('/auth/token/refresh', { refresh_token: refreshToken });
+      const response = await axiosInstance.post('/auth/token/refresh', { refresh_token: refreshToken });
       const { access_token, user } = response.data;
       
       if (!access_token) {
@@ -331,7 +252,7 @@ export const authApi = {
 export const profileApi = {
   getAllUsers: async () => {
    try {
-    const response = await apiClient.get('/users');
+    const response = await axiosInstance.get('/users');
     return response.data;
    } catch (error) {
     handleApiError(error);
@@ -339,11 +260,11 @@ export const profileApi = {
    }
   },
   updateUser: async (id: string, formData: Partial<ProfileData>) => {
-    const response = await apiClient.patch(`/users/${id}`, formData);
+    const response = await axiosInstance.patch(`/users/${id}`, formData);
     return response.data;
   },
   deleteUser: async (id: string) => {
-    const response = await apiClient.delete(`/users/${id}`);
+    const response = await axiosInstance.delete(`/users/${id}`);
     return response.data;
   },
 };
@@ -351,16 +272,16 @@ export const profileApi = {
 // Teacher API
 export const teacherApi = {
   createTeacher: async (teacherData: any) => {
-    const response = await apiClient.post('/teachers/', teacherData);
+    const response = await axiosInstance.post('/teachers/', teacherData);
     return response.data;
   },
   getTeachers: async () => {
-    const response = await apiClient.get('/teachers/');
+    const response = await axiosInstance.get('/teachers/');
     return response.data;
   },
   getAllTeachers: async (page: number, pageSize: number) => {
     try {
-      const response = await apiClient.get(`/teachers?page=${page}&limit=${pageSize}`);
+      const response = await axiosInstance.get(`/teachers?page=${page}&limit=${pageSize}`);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -368,19 +289,19 @@ export const teacherApi = {
     }
   },
   getTeacher: async (id: string) => {
-    const response = await apiClient.get(`/teachers/${id}/`);
+    const response = await axiosInstance.get(`/teachers/${id}/`);
     return response.data;
   },
   updateTeacher: async (id: string, teacherData: any) => {
-    const response = await apiClient.patch(`/teachers/${id}/`, teacherData);
+    const response = await axiosInstance.patch(`/teachers/${id}/`, teacherData);
     return response.data;
   },
   deleteTeacher: async (id: string) => {
-    const response = await apiClient.delete(`/teachers/${id}/`);
+    const response = await axiosInstance.delete(`/teachers/${id}/`);
     return response.data;
   },
   bulkDeleteTeachers: async (ids: string[]) => {
-    const response = await apiClient.post('/teachers/bulk-delete/', { ids });
+    const response = await axiosInstance.post('/teachers/bulk-delete/', { ids });
     return response.data;
   }
 };
@@ -389,7 +310,7 @@ export const teacherApi = {
 export const studentApi = {
   getAllStudents: async (page: number, pageSize: number) => {
     try {
-      const response = await apiClient.get(`/students?page=${page}&limit=${pageSize}`);
+      const response = await axiosInstance.get(`/students?page=${page}&limit=${pageSize}`);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -399,7 +320,7 @@ export const studentApi = {
 
   getStudent: async (id: string) => {
     try {
-      const response = await apiClient.get(`/students/${id}`);
+      const response = await axiosInstance.get(`/students/${id}`);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -409,7 +330,7 @@ export const studentApi = {
 
   createStudent: async (formData: any) => {
     try {
-      const response = await apiClient.post('/students', formData);
+      const response = await axiosInstance.post('/students', formData);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -419,7 +340,7 @@ export const studentApi = {
 
   updateStudent: async (id: string, formData: any) => {
     try {
-      const response = await apiClient.patch(`/students/${id}`, formData);
+      const response = await axiosInstance.patch(`/students/${id}`, formData);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -429,7 +350,7 @@ export const studentApi = {
 
   deleteStudent: async (id: string) => {
     try {
-      const response = await apiClient.delete(`/students/${id}`);
+      const response = await axiosInstance.delete(`/students/${id}`);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -439,7 +360,7 @@ export const studentApi = {
 
   bulkDeleteStudents: async (ids: string[]) => {
     try {
-      const response = await apiClient.post('/students/bulk-delete', { ids });
+      const response = await axiosInstance.post('/students/bulk-delete', { ids });
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -455,7 +376,7 @@ export const statsApi = {
       if (year) params.append('year', year.toString());
       if (month) params.append('month', month.toString());
       
-      const response = await apiClient.get(`/stats/total?${params.toString()}`);
+      const response = await axiosInstance.get(`/stats/total?${params.toString()}`);
       return response.data;
     } catch (error) {
       handleApiError(error);
@@ -467,7 +388,7 @@ export const statsApi = {
 // Attendance API
 export const attendanceApi = {
   getTeacherAttendance: async (teacherId: string, year: number, month: number) => {
-    const response = await apiClient.get(`/attendance/${teacherId}/${year}/${month}`);
+    const response = await axiosInstance.get(`/attendance/${teacherId}/${year}/${month}`);
     return response.data;
   },
 
@@ -488,7 +409,7 @@ export const attendanceApi = {
     absent_days?: number[];
     extra_days?: number[];
   }) => {
-    const response = await apiClient.post('/attendance', {
+    const response = await axiosInstance.post('/attendance', {
       teacherId,
       year,
       month,
@@ -507,7 +428,7 @@ export const attendanceApi = {
 export const exportApi = {
   bulkExport: async (type: 'student' | 'teacher', ids: string[]) => {
     try {
-      const response = await apiClient.post('/export/bulk', { type, ids }, {
+      const response = await axiosInstance.post('/export/bulk', { type, ids }, {
         responseType: 'blob',
         timeout: 30000, // Increase timeout to 30 seconds for large files
       });
