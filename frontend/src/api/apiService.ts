@@ -176,7 +176,7 @@ export const authApi = {
     }
   },
 
-  login: async (credentials: { username: string; password: string }) => {
+  login: async (credentials: { email: string; password: string }) => {
     try {
       console.log('Sending login request to:', `${API_URL}/auth/login`);
       const response = await axiosInstance.post('/auth/login', credentials);
