@@ -16,8 +16,11 @@ on:
 
 env:
   REGISTRY: docker.io
+  REGISTRY_URL: docker.io/cxddcx27
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
   NGINX_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-nginx
+  MAX_RETRIES: 3
+  RETRY_DELAY: 10
 
 jobs:
   build-and-deploy:
@@ -34,6 +37,19 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           buildkitd-flags: --debug
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Check Docker Hub Authentication
+        id: docker_auth
+        run: |
+          echo "::debug::Checking Docker Hub credentials"
+          if ! echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin; then
+            echo "::error::Failed to authenticate with Docker Hub"
+            exit 1
+          fi
+          echo "::debug::Successfully authenticated with Docker Hub"
 
       - name: Log into Docker Hub
         uses: docker/login-action@v3
@@ -42,18 +58,36 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.BACKEND_IMAGE }}
+            ${{ env.NGINX_IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+            type=ref,event=branch
+            type=ref,event=tag
+
       - name: Build and push Backend image
         uses: docker/build-push-action@v5
         id: docker_build_backend
         with:
           context: ./backend
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.BACKEND_IMAGE }}:latest
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
           build-args: |
             NODE_ENV=production
+          outputs: type=docker,dest=/tmp/backend-image.tar
+          platforms: linux/amd64
 
       - name: Build and push Nginx image
         uses: docker/build-push-action@v5
@@ -61,10 +95,75 @@ jobs:
         with:
           context: ./nginx
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.NGINX_IMAGE }}:latest
+          tags: |
+            ${{ env.NGINX_IMAGE }}:latest
+            ${{ env.NGINX_IMAGE }}:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
+          outputs: type=docker,dest=/tmp/nginx-image.tar
+          platforms: linux/amd64
+
+      - name: Verify images
+        if: success()
+        run: |
+          echo "::debug::Verifying backend image"
+          docker load < /tmp/backend-image.tar
+          docker inspect ${{ env.BACKEND_IMAGE }}:latest
+          
+          echo "::debug::Verifying nginx image"
+          docker load < /tmp/nginx-image.tar
+          docker inspect ${{ env.NGINX_IMAGE }}:latest
+
+      - name: Push images with retry
+        if: github.event_name != 'pull_request'
+        run: |
+          push_with_retry() {
+            local image=$1
+            local max_attempts=$2
+            local attempt=1
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "::debug::Pushing $image (attempt $attempt/$max_attempts)"
+              if docker push $image; then
+                echo "::debug::Successfully pushed $image"
+                return 0
+              fi
+              
+              echo "::warning::Push attempt $attempt failed, waiting before retry..."
+              sleep ${{ env.RETRY_DELAY }}
+              attempt=$((attempt + 1))
+            done
+            
+            echo "::error::Failed to push $image after $max_attempts attempts"
+            return 1
+          }
+          
+          push_with_retry "${{ env.BACKEND_IMAGE }}:latest" ${{ env.MAX_RETRIES }}
+          push_with_retry "${{ env.BACKEND_IMAGE }}:${{ github.sha }}" ${{ env.MAX_RETRIES }}
+          push_with_retry "${{ env.NGINX_IMAGE }}:latest" ${{ env.MAX_RETRIES }}
+          push_with_retry "${{ env.NGINX_IMAGE }}:${{ github.sha }}" ${{ env.MAX_RETRIES }}
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "::group::Docker Version and Info"
+          docker version
+          docker info
+          echo "::endgroup::"
+          
+          echo "::group::Docker Hub Connection Test"
+          curl -v https://registry.hub.docker.com/v2/
+          echo "::endgroup::"
+          
+          echo "::group::Docker Images"
+          docker images
+          echo "::endgroup::"
+          
+          echo "::group::Docker Login Status"
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} 2>&1 || true
+          echo "::endgroup::"
 
       - name: Setup SSH
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
