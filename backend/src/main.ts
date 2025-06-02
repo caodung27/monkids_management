@@ -18,69 +18,40 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       corsLogger.debug(`Incoming request from origin: ${origin}`);
-      corsLogger.debug('Checking request headers...');
       
-      // Log all headers for debugging
-      const req = arguments[1]?.req;
-      if (req?.headers) {
-        corsLogger.debug('Request headers:', JSON.stringify(req.headers, null, 2));
-      }
-
-      // In development, allow undefined origin
-      if (!origin && process.env.NODE_ENV !== 'production') {
-        corsLogger.debug('Development mode: allowing undefined origin');
-        callback(null, true);
-        return;
-      }
-
-      // Try to get origin from various headers
-      const effectiveOrigin = origin || 
-        req?.headers?.['x-origin'] || 
-        req?.headers?.origin ||
-        req?.headers?.referer?.match(/^(https?:\/\/[^\/]+)/)?.[1];
-
-      corsLogger.debug(`Effective origin: ${effectiveOrigin}`);
-      corsLogger.debug(`Allowed origins: ${allowedOrigins.join(', ')}`);
-
-      // In development, be more lenient with origins
+      // In development, allow all origins
       if (process.env.NODE_ENV !== 'production') {
         corsLogger.debug('Development mode: allowing all origins');
         callback(null, true);
         return;
       }
 
-      // In production, strictly check origins
-      if (!effectiveOrigin) {
-        corsLogger.warn('No origin found in production mode');
-        callback(new Error('Origin required in production mode'));
+      // In production, check against allowed origins
+      if (!origin) {
+        corsLogger.debug('No origin provided, allowing request');
+        callback(null, true);
         return;
       }
 
-      if (allowedOrigins.includes(effectiveOrigin)) {
-        corsLogger.debug(`Origin ${effectiveOrigin} is allowed`);
+      if (allowedOrigins.includes(origin)) {
+        corsLogger.debug(`Origin ${origin} is allowed`);
         callback(null, true);
       } else {
-        corsLogger.warn(`Origin ${effectiveOrigin} is not allowed. Allowed origins: ${allowedOrigins.join(', ')}`);
-        callback(new Error('Not allowed by CORS'));
+        corsLogger.warn(`Origin ${origin} is not allowed`);
+        callback(null, allowedOrigins[0]);
       }
     },
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
       'Accept',
       'Origin',
-      'X-Origin',
-      'X-Requested-With',
-      'Access-Control-Request-Method',
-      'Access-Control-Request-Headers',
-      'Referer'
+      'X-Requested-With'
     ],
     exposedHeaders: ['Content-Length', 'Content-Range'],
-    credentials: true,
-    maxAge: 3600,
-    preflightContinue: false,
-    optionsSuccessStatus: 204
+    maxAge: 3600
   });
 
   // Global prefix
@@ -129,6 +100,7 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Application is running on port: ${port}`);
 }
+
 bootstrap().catch((err) => {
   console.error('Error during bootstrap:', err);
   process.exit(1);
