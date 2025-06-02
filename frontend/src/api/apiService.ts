@@ -37,6 +37,9 @@ export const TokenService = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monkids.site';
+const FRONTEND_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://www.monkids.site' 
+  : 'http://localhost:3000';
 
 export const axiosInstance = axios.create({
   baseURL: API_URL,
@@ -45,9 +48,7 @@ export const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Origin': process.env.NODE_ENV === 'production' 
-      ? 'https://www.monkids.site' 
-      : 'http://localhost:3000'
+    'Origin': FRONTEND_URL
   }
 });
 
@@ -59,6 +60,8 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Ensure Origin header is set
+    config.headers.Origin = FRONTEND_URL;
     return config;
   },
   (error) => {

@@ -8,6 +8,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
+  const corsLogger = new Logger('CORS');
 
   // CORS configuration for both development and production
   const allowedOrigins = process.env.NODE_ENV === 'production'
@@ -16,7 +17,6 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      const corsLogger = new Logger('CORS');
       corsLogger.debug(`Incoming request from origin: ${origin}`);
       corsLogger.debug('Checking request headers...');
       
@@ -51,7 +51,16 @@ async function bootstrap() {
       }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Origin'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Origin',
+      'X-Requested-With',
+      'Access-Control-Request-Method',
+      'Access-Control-Request-Headers'
+    ],
     exposedHeaders: ['Content-Length', 'Content-Range'],
     credentials: true,
     maxAge: 3600,
