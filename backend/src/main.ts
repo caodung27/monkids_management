@@ -20,12 +20,10 @@ async function bootstrap() {
       corsLogger.debug(`Incoming request from origin: ${origin}`);
       corsLogger.debug('Checking request headers...');
       
-      // If origin is undefined and we're in production, check X-Origin header
-      if (!origin && process.env.NODE_ENV === 'production') {
-        const req = arguments[1]?.req;
-        const xOrigin = req?.headers?.['x-origin'];
-        corsLogger.debug(`No origin found, checking X-Origin header: ${xOrigin}`);
-        origin = xOrigin || origin;
+      // Log all headers for debugging
+      const req = arguments[1]?.req;
+      if (req?.headers) {
+        corsLogger.debug('Request headers:', JSON.stringify(req.headers, null, 2));
       }
 
       // In development, allow undefined origin
@@ -35,11 +33,20 @@ async function bootstrap() {
         return;
       }
 
-      if (!origin || allowedOrigins.includes(origin)) {
-        corsLogger.debug(`Origin ${origin} is allowed`);
+      // Try to get origin from various headers
+      const effectiveOrigin = origin || 
+        req?.headers?.['x-origin'] || 
+        req?.headers?.origin ||
+        req?.headers?.referer?.match(/^(https?:\/\/[^\/]+)/)?.[1];
+
+      corsLogger.debug(`Effective origin: ${effectiveOrigin}`);
+      corsLogger.debug(`Allowed origins: ${allowedOrigins.join(', ')}`);
+
+      if (!effectiveOrigin || allowedOrigins.includes(effectiveOrigin)) {
+        corsLogger.debug(`Origin ${effectiveOrigin} is allowed`);
         callback(null, true);
       } else {
-        corsLogger.warn(`Origin ${origin} is not allowed. Allowed origins: ${allowedOrigins.join(', ')}`);
+        corsLogger.warn(`Origin ${effectiveOrigin} is not allowed. Allowed origins: ${allowedOrigins.join(', ')}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
