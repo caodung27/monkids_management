@@ -17,6 +17,10 @@ on:
 # This workflow handles the full deployment process to production
 # Including building, pushing to Docker Hub, and deploying to EC2
 
+permissions:
+  contents: read
+  issues: write
+
 env:
   REGISTRY: docker.io
   REGISTRY_URL: docker.io/${{ secrets.DOCKERHUB_USERNAME }}
