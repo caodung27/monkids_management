@@ -10,24 +10,24 @@ services:
     networks:
       - backend-network
     environment:
-      - NODE_ENV=${NODE_ENV}
-      - PORT=${PORT}
+      - NODE_ENV=production
+      - PORT=8000
       # Database Configuration
-      - DATABASE_HOST=${DATABASE_HOST}
-      - DATABASE_PORT=${DATABASE_PORT}
-      - DATABASE_USERNAME=${DATABASE_USERNAME}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
-      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_HOST=172.31.14.122
+      - DATABASE_PORT=5432
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=postgres
       # JWT Configuration
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - JWT_EXPIRATION=${JWT_EXPIRATION}
-      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
+      - JWT_SECRET=monkids-jwt-secret-key-2024
+      - JWT_REFRESH_SECRET=monkids-jwt-refresh-secret-key-2024
+      - JWT_EXPIRATION=1d
+      - JWT_REFRESH_EXPIRATION=7d
       # Google OAuth2 Configuration
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-      - FRONTEND_URL=${FRONTEND_URL}
+      - GOOGLE_CLIENT_ID=542269964324-6kmatcq5rp19lefr3eiouu60hkqdg6jk.apps.googleusercontent.com
+      - GOOGLE_CLIENT_SECRET=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
+      - GOOGLE_CALLBACK_URL=https://api.monkids.site/api/auth/google/callback
+      - FRONTEND_URL=https://www.monkids.site/
       # Chrome/Puppeteer Configuration
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
       - PUPPETEER_NO_SANDBOX=true
