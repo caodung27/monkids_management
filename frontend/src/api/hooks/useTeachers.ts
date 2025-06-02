@@ -24,7 +24,7 @@ export const useTeachers = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTeachers, setTotalTeachers] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [totalPages, setTotalPages] = useState(1);
 
   const fetchTeachers = async (page: number, pageSize: number = itemsPerPage) => {

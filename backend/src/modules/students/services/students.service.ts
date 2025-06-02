@@ -119,7 +119,46 @@ export class StudentsService {
     updateStudentDto: UpdateStudentDto,
   ): Promise<Student> {
     const student = await this.findOne(id);
-    Object.assign(student, updateStudentDto);
+
+    // Calculate final fee
+    const baseFee = Number(updateStudentDto.base_fee ?? student.base_fee);
+    const discountPercentage = Number(updateStudentDto.discount_percentage ?? student.discount_percentage);
+    const finalFee = Math.round(baseFee * (1 - discountPercentage));
+
+    // Calculate meal fee
+    const pt = Number(updateStudentDto.pt ?? student.pt);
+    const pm = Number(updateStudentDto.pm ?? student.pm);
+    const mealFee = Math.round((pm - pt) * 30000); // 30000 is MEAL_FEE_PER_TICKET
+
+    // Calculate total fee
+    const utilitiesFee = Number(updateStudentDto.utilities_fee ?? student.utilities_fee);
+    const engFee = Number(updateStudentDto.eng_fee ?? student.eng_fee);
+    const skillFee = Number(updateStudentDto.skill_fee ?? student.skill_fee);
+    const studentFund = Number(updateStudentDto.student_fund ?? student.student_fund);
+    const facilityFee = Number(updateStudentDto.facility_fee ?? student.facility_fee);
+    const totalFee = Math.round(
+      finalFee + 
+      utilitiesFee + 
+      mealFee + 
+      engFee + 
+      skillFee + 
+      studentFund + 
+      facilityFee
+    );
+
+    // Calculate remaining amount
+    const paidAmount = Number(updateStudentDto.paid_amount ?? student.paid_amount);
+    const remainingAmount = Math.round(totalFee - paidAmount);
+
+    // Update the student object with new values and calculated fields
+    Object.assign(student, {
+      ...updateStudentDto,
+      final_fee: finalFee,
+      meal_fee: mealFee,
+      total_fee: totalFee,
+      remaining_amount: remainingAmount,
+    });
+
     return this.studentRepository.save(student);
   }
 

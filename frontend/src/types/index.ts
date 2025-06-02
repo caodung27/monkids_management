@@ -33,6 +33,8 @@ export interface Teacher {
   received_salary: number;
   extra_teaching_days: number;
   extra_salary: number;
+  probation_days: number;
+  probation_salary: number;
   insurance_support: number;
   responsibility_support: number;
   breakfast_support: number;
@@ -76,6 +78,8 @@ export interface TeacherApiPayload {
   received_salary: string;
   extra_teaching_days: number;
   extra_salary: string;
+  probation_days: number;
+  probation_salary: string;
   insurance_support: string;
   responsibility_support: string;
   breakfast_support: string;

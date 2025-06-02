@@ -366,7 +366,7 @@ export default function TeachersPage() {
                             </Link>
                           )}
                           {canPrint() && (
-                            <Link href={`/dashboard/teachers/${teacher.id}/payroll`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <Link href={`/dashboard/teachers/${teacher.id}/receipt`} style={{ textDecoration: 'none', color: 'inherit' }}>
                               <Menu.Item leftSection={<IconPrinter size={14} />}>
                                 In bảng lương
                               </Menu.Item>

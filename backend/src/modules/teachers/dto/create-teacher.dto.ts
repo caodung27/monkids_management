@@ -13,7 +13,7 @@ export class CreateTeacherDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: 'Teacher role', example: 'Quản lý, GV' })
+  @ApiProperty({ description: 'Teacher role as comma-separated string', example: 'Quản lý, Giáo viên' })
   @IsString()
   @IsNotEmpty()
   role: string;
@@ -62,6 +62,18 @@ export class CreateTeacherDto {
   @Min(0)
   @IsOptional()
   extra_salary?: number;
+
+  @ApiProperty({ description: 'Probation days', example: 5 })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  probation_days?: number;
+
+  @ApiProperty({ description: 'Probation salary', example: '1000000.00' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  probation_salary?: number;
 
   @ApiProperty({ description: 'Insurance support', example: '500000.00' })
   @IsNumber()

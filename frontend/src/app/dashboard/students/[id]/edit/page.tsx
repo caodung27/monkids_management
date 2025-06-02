@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, KeyboardEvent, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Popover } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -39,6 +39,32 @@ export default function EditStudentPage() {
       classroom: (value) => (!value ? 'Vui lòng chọn lớp' : null),
     }
   });
+
+  // Add computed values for total_fee and remaining_amount
+  const computedTotalFee = useMemo(() => {
+    const values = form.values;
+    return Math.round(
+      (values.final_fee || 0) +
+      (values.utilities_fee || 0) +
+      (values.meal_fee || 0) +
+      (values.eng_fee || 0) +
+      (values.skill_fee || 0) +
+      (values.student_fund || 0) +
+      (values.facility_fee || 0)
+    );
+  }, [
+    form.values.final_fee,
+    form.values.utilities_fee,
+    form.values.meal_fee,
+    form.values.eng_fee,
+    form.values.skill_fee,
+    form.values.student_fund,
+    form.values.facility_fee
+  ]);
+
+  const computedRemainingAmount = useMemo(() => {
+    return Math.round(computedTotalFee - (form.values.paid_amount || 0));
+  }, [computedTotalFee, form.values.paid_amount]);
 
   useEffect(() => {
     const fetchStudentData = async () => {
@@ -81,50 +107,63 @@ export default function EditStudentPage() {
   }, [idFromParams]); // form.setValues removed from deps, form object itself is stable
 
   useEffect(() => {
-    const { 
-      base_fee, discount_percentage, utilities_fee, pt, pm, 
-      eng_fee, skill_fee, student_fund, facility_fee, paid_amount 
-    } = form.values;
+    const calculateFees = () => {
+      const values = form.values;
+      
+      // Ensure numeric inputs, defaulting to 0 if undefined/null/empty string
+      const baseFee = Number(values.base_fee) || 0;
+      const discountPercentage = Number(values.discount_percentage) || 0;
+      const utilitiesFee = Number(values.utilities_fee) || 0;
+      const pmValue = Number(values.pm) || 0;
+      const ptValue = Number(values.pt) || 0;
+      const engFee = Number(values.eng_fee) || 0;
+      const skillFee = Number(values.skill_fee) || 0;
+      const studentFund = Number(values.student_fund) || 0;
+      const facilityFee = Number(values.facility_fee) || 0;
+      const paidAmount = Number(values.paid_amount) || 0;
 
-    // Calculate final fee after discount and round to whole number
-    const calculatedFinalFee = Math.round(base_fee * (1 - (discount_percentage || 0))); 
-    
-    // Calculate meal fee and round to whole number
-    const calculatedMealFee = Math.round((pm - pt) * MEAL_FEE_PER_TICKET);
-    
-    // Calculate total fee and round to whole number
-    // Ensure all values are valid numbers or default to 0
-    const safeUtilities = Number(utilities_fee) || 0;
-    const safeEngFee = Number(eng_fee) || 0;
-    const safeSkillFee = Number(skill_fee) || 0;
-    const safeStudentFund = Number(student_fund) || 0;
-    const safeFacilityFee = Number(facility_fee) || 0;
-    
-    const calculatedTotalFee = Math.round(
-      calculatedFinalFee + 
-      safeUtilities + 
-      calculatedMealFee + 
-      safeEngFee + 
-      safeSkillFee + 
-      safeStudentFund + 
-      safeFacilityFee
-    );
-    
-    // Calculate remaining amount and round to whole number
-    const safePaidAmount = Number(paid_amount) || 0;
-    const calculatedRemainingAmount = Math.round(calculatedTotalFee - safePaidAmount);
+      // Calculate final fee after discount and round to whole number
+      const finalFee = Math.round(baseFee * (1 - discountPercentage));
+      
+      // Calculate meal fee: (pm - pt) * MEAL_FEE_PER_TICKET
+      const mealFee = Math.round((pmValue - ptValue) * MEAL_FEE_PER_TICKET);
+      
+      // Calculate total fee: sum of all fees
+      const totalFee = Math.round(
+        finalFee + 
+        utilitiesFee + 
+        mealFee + 
+        engFee + 
+        skillFee + 
+        studentFund + 
+        facilityFee
+      );
+                      
+      // Calculate remaining amount
+      const remainingAmount = Math.round(totalFee - paidAmount);
 
-    // Use a single setValues to avoid multiple re-renders if possible,
-    // or setFieldValue if only these specific fields are changing due to calculation
-    form.setFieldValue('final_fee', calculatedFinalFee);
-    form.setFieldValue('meal_fee', calculatedMealFee);
-    form.setFieldValue('total_fee', calculatedTotalFee);
-    form.setFieldValue('remaining_amount', calculatedRemainingAmount);
+      // Update all calculated values at once to minimize re-renders
+      form.setValues(currentValues => ({
+        ...currentValues,
+        final_fee: finalFee,
+        meal_fee: mealFee,
+        total_fee: totalFee,
+        remaining_amount: remainingAmount,
+      }));
+    };
 
+    calculateFees();
   }, [
-    form.values.base_fee, form.values.discount_percentage, form.values.utilities_fee,
-    form.values.pt, form.values.pm, form.values.eng_fee, form.values.skill_fee, 
-    form.values.student_fund, form.values.facility_fee, form.values.paid_amount
+    form.values.base_fee,
+    form.values.discount_percentage,
+    form.values.utilities_fee,
+    form.values.pt,
+    form.values.pm,
+    form.values.eng_fee,
+    form.values.skill_fee,
+    form.values.student_fund,
+    form.values.facility_fee,
+    form.values.paid_amount
   ]);
 
   const handleSubmit = async (values: StudentEditFormValues) => {
@@ -160,8 +199,8 @@ export default function EditStudentPage() {
         student_fund: Number(values.student_fund || 0),
         facility_fee: Number(values.facility_fee || 0),
         paid_amount: Number(values.paid_amount || 0),
-        total_fee: Number(values.total_fee || 0),
-        remaining_amount: Number(values.remaining_amount || 0),
+        total_fee: computedTotalFee,
+        remaining_amount: computedRemainingAmount,
       };
 
       // Use sequential_number instead of UUID for update
@@ -340,7 +379,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Học phí ban đầu"
                 placeholder="Nhập học phí ban đầu"
-                {...form.getInputProps('base_fee')}
+                value={form.values.base_fee}
+                onChange={(val) => form.setFieldValue('base_fee', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -353,7 +393,7 @@ export default function EditStudentPage() {
                 label="Giảm học phí (%)"
                 placeholder="Nhập % giảm học phí"
                 value={Math.round(form.values.discount_percentage * 100)}
-                onChange={(val) => form.setFieldValue('discount_percentage', (val === '' ? 0 : Number(val)) / 100)}
+                onChange={(val) => form.setFieldValue('discount_percentage', (!val && val !== 0 ? 0 : Number(val)) / 100)}
                 suffix=" %"
                 decimalScale={0}
                 min={0}
@@ -366,7 +406,7 @@ export default function EditStudentPage() {
                 label="Học phí sau giảm"
                 placeholder="Học phí sau giảm"
                 readOnly
-                {...form.getInputProps('final_fee')}
+                value={form.values.final_fee}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -376,7 +416,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Phí điện nước"
                 placeholder="Nhập phí điện nước"
-                {...form.getInputProps('utilities_fee')}
+                value={form.values.utilities_fee}
+                onChange={(val) => form.setFieldValue('utilities_fee', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -393,7 +434,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Phiếu tồn"
                 placeholder="Nhập số phiếu tồn"
-                {...form.getInputProps('pt')}
+                value={form.values.pt}
+                onChange={(val) => form.setFieldValue('pt', !val && val !== 0 ? 0 : Number(val))}
                 decimalScale={1}
                 min={0}
                 onKeyDown={handleKeyDown}
@@ -403,7 +445,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Phiếu mới"
                 placeholder="Nhập số phiếu mới"
-                {...form.getInputProps('pm')}
+                value={form.values.pm}
+                onChange={(val) => form.setFieldValue('pm', !val && val !== 0 ? 0 : Number(val))}
                 decimalScale={1}
                 min={0}
                 onKeyDown={handleKeyDown}
@@ -414,7 +457,7 @@ export default function EditStudentPage() {
                 label="Tổng tiền ăn"
                 placeholder="Tổng tiền ăn"
                 readOnly
-                {...form.getInputProps('meal_fee')}
+                value={form.values.meal_fee}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -429,7 +472,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Học phí kỹ năng sống"
                 placeholder="Nhập học phí KNS"
-                {...form.getInputProps('skill_fee')}
+                value={form.values.skill_fee}
+                onChange={(val) => form.setFieldValue('skill_fee', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -441,7 +485,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Học phí Tiếng Anh"
                 placeholder="Nhập học phí TA"
-                {...form.getInputProps('eng_fee')}
+                value={form.values.eng_fee}
+                onChange={(val) => form.setFieldValue('eng_fee', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -458,7 +503,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Quỹ học sinh"
                 placeholder="Nhập quỹ học sinh"
-                {...form.getInputProps('student_fund')}
+                value={form.values.student_fund}
+                onChange={(val) => form.setFieldValue('student_fund', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -470,7 +516,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Cơ sở vật chất"
                 placeholder="Nhập phí CSVC"
-                {...form.getInputProps('facility_fee')}
+                value={form.values.facility_fee}
+                onChange={(val) => form.setFieldValue('facility_fee', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -487,7 +534,8 @@ export default function EditStudentPage() {
               <NumberInput
                 label="Số tiền đã đóng"
                 placeholder="Nhập số tiền đã đóng"
-                {...form.getInputProps('paid_amount')}
+                value={form.values.paid_amount}
+                onChange={(val) => form.setFieldValue('paid_amount', !val && val !== 0 ? 0 : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -500,7 +548,7 @@ export default function EditStudentPage() {
                 label="Tổng học phí"
                 placeholder="Tổng học phí"
                 readOnly
-                {...form.getInputProps('total_fee')}
+                value={computedTotalFee}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
@@ -511,7 +559,7 @@ export default function EditStudentPage() {
                 label="Số tiền còn lại"
                 placeholder="Số tiền còn lại"
                 readOnly
-                {...form.getInputProps('remaining_amount')}
+                value={computedRemainingAmount}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}

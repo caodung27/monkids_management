@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea, MultiSelect, Badge } from '@mantine/core';
+import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { teacherApi } from '@/api/apiService';
 import { Teacher, TeacherApiPayload } from '@/types';
@@ -44,11 +44,9 @@ export default function EditTeacherPage() {
     const fetchTeacherData = async () => {
       try {
         const teacher = await teacherApi.getTeacher(teacherId);
-        // Split the role string into an array
-        const roles = teacher.role.split(',').map((role: string) => role.trim());
         form.setValues({
           ...teacher,
-          role: roles,
+          role: teacher.role // No need to split, keep as string
         });
 
         // Store initial source values after form is populated
@@ -72,15 +70,16 @@ export default function EditTeacherPage() {
       base_salary: v_base_salary,
       teaching_days: v_teaching_days,
       absence_days: v_absence_days,
-      extra_teaching_days: v_extra_teaching_days, // Raw value from form input
-      skill_sessions: v_skill_sessions,           // Raw value from form input
-      english_sessions: v_english_sessions,       // Raw value from form input
+      extra_teaching_days: v_extra_teaching_days,
+      probation_days: v_probation_days,
+      skill_sessions: v_skill_sessions,
+      english_sessions: v_english_sessions,
       paid_amount: v_paid_amount,
       new_students_list: v_new_students_list,
-      extra_salary: v_current_extra_salary,     // Current extra_salary from form (API or last calc)
-      skill_salary: v_current_skill_salary,   // Current skill_salary from form
-      english_salary: v_current_english_salary, // Current english_salary from form
-      // Values needed for the "changed" check below
+      extra_salary: v_current_extra_salary,
+      probation_salary: v_current_probation_salary,
+      skill_salary: v_current_skill_salary,
+      english_salary: v_current_english_salary,
       received_salary: v_current_received_salary,
       total_salary: v_current_total_salary
     } = form.values;
@@ -89,9 +88,10 @@ export default function EditTeacherPage() {
     const base_salary = Number(v_base_salary) || 0;
     const teaching_days = Number(v_teaching_days) || 0;
     const absence_days = Number(v_absence_days) || 0;
-    const extra_teaching_days_val = Number(v_extra_teaching_days) || 0; // Defaulted for calculation
-    const skill_sessions_val = Number(v_skill_sessions) || 0;         // Defaulted for calculation
-    const english_sessions_val = Number(v_english_sessions) || 0;       // Defaulted for calculation
+    const extra_teaching_days_val = Number(v_extra_teaching_days) || 0;
+    const probation_days_val = Number(v_probation_days) || 0;
+    const skill_sessions_val = Number(v_skill_sessions) || 0;
+    const english_sessions_val = Number(v_english_sessions) || 0;
     const paid_amount = Number(v_paid_amount) || 0;
     const new_students_list = Number(v_new_students_list) || 0;
 
@@ -102,35 +102,30 @@ export default function EditTeacherPage() {
         ? Math.round((base_salary / totalWorkDaysAndAbsence) * teaching_days)
         : 0;
 
-    // Determine final_extra_salary
-    // Default to current form value (from API/last calc), or 0 if that's not a number
-    let final_extra_salary = Number(v_current_extra_salary) || 0;
-    // Recalculate if the raw input for extra_teaching_days has changed from its initial API-loaded value
-    if (v_extra_teaching_days !== initialExtraTeachingDays.current) {
-      final_extra_salary = extra_teaching_days_val * 150000; // Use defaulted numeric value for calculation
-    }
+    // Calculate extra salary using the updated formula
+    const final_extra_salary = totalWorkDaysAndAbsence > 0
+      ? Math.round((base_salary / totalWorkDaysAndAbsence) * extra_teaching_days_val)
+      : 0;
 
-    // Determine final_skill_salary
-    let final_skill_salary = Number(v_current_skill_salary) || 0;
-    if (v_skill_sessions !== initialSkillSessions.current) {
-      final_skill_salary = skill_sessions_val * 125000;
-    }
+    // Calculate probation salary
+    const final_probation_salary = probation_days_val * 200000;
 
-    // Determine final_english_salary
-    let final_english_salary = Number(v_current_english_salary) || 0;
-    if (v_english_sessions !== initialEnglishSessions.current) {
-      final_english_salary = english_sessions_val * 150000;
-    }
+    // Calculate skill salary
+    const final_skill_salary = skill_sessions_val * 125000;
+
+    // Calculate english salary
+    const final_english_salary = english_sessions_val * 150000;
 
     // Add insurance and other supports to calculation
     const insurance_support = Number(form.values.insurance_support) || 0;
     const responsibility_support = Number(form.values.responsibility_support) || 0;
     const breakfast_support = Number(form.values.breakfast_support) || 0;
     
-    // Calculate total salary using robustly defaulted values
+    // Calculate total salary
     const calculated_total_salary =
       calculated_received_salary +
       final_extra_salary +
+      final_probation_salary +
       final_skill_salary +
       final_english_salary +
       insurance_support +
@@ -139,29 +134,16 @@ export default function EditTeacherPage() {
       new_students_list -
       paid_amount;
 
-    // Prepare values to set in the form
-    const newFormValues = {
+    // Update form values
+    form.setValues(currentValues => ({
+      ...currentValues,
       received_salary: calculated_received_salary,
       extra_salary: final_extra_salary,
+      probation_salary: final_probation_salary,
       skill_salary: final_skill_salary,
       english_salary: final_english_salary,
       total_salary: calculated_total_salary,
-    };
-
-    // Update form only if any of the calculated values have actually changed
-    // to prevent unnecessary re-renders or potential loops.
-    if (
-      v_current_received_salary !== newFormValues.received_salary ||
-      v_current_extra_salary !== newFormValues.extra_salary ||
-      v_current_skill_salary !== newFormValues.skill_salary ||
-      v_current_english_salary !== newFormValues.english_salary ||
-      v_current_total_salary !== newFormValues.total_salary
-    ) {
-      form.setValues(currentValues => ({
-        ...currentValues,
-        ...newFormValues,
-      }));
-    }
+    }));
   }, [
     // Dependencies: all values from form.values that are read in this effect.
     // The refs (initialExtraTeachingDays, etc.) are stable and don't need to be dependencies.
@@ -169,11 +151,13 @@ export default function EditTeacherPage() {
     form.values.teaching_days,
     form.values.absence_days,
     form.values.extra_teaching_days,
+    form.values.probation_days,
     form.values.skill_sessions,
     form.values.english_sessions,
     form.values.paid_amount,
     form.values.new_students_list,
     form.values.extra_salary, 
+    form.values.probation_salary, 
     form.values.skill_salary, 
     form.values.english_salary, 
     form.values.received_salary,
@@ -189,26 +173,28 @@ export default function EditTeacherPage() {
       const { id, ...formValues } = values;
 
       const apiPayload: TeacherApiPayload = {
-        ...formValues,
-        role: (formValues.role as unknown as string[]).join(', '),
-        phone: formValues.phone === '' ? null : formValues.phone,
-        base_salary: (Number(formValues.base_salary) || 0).toFixed(2),
-        teaching_days: Number(formValues.teaching_days) || 0,
-        absence_days: Number(formValues.absence_days) || 0,
-        received_salary: (Number(formValues.received_salary) || 0).toFixed(2),
-        extra_teaching_days: Number(formValues.extra_teaching_days) || 0,
-        extra_salary: (Number(formValues.extra_salary) || 0).toFixed(2),
-        insurance_support: (Number(formValues.insurance_support) || 0).toFixed(2),
-        responsibility_support: (Number(formValues.responsibility_support) || 0).toFixed(2),
-        breakfast_support: (Number(formValues.breakfast_support) || 0).toFixed(2),
-        skill_sessions: Number(formValues.skill_sessions) || 0,
-        skill_salary: (Number(formValues.skill_salary) || 0).toFixed(2),
-        english_sessions: Number(formValues.english_sessions) || 0,
-        english_salary: (Number(formValues.english_salary) || 0).toFixed(2),
-        new_students_list: String(Number(formValues.new_students_list) || 0),
-        paid_amount: (Number(formValues.paid_amount) || 0).toFixed(2),
-        total_salary: (Number(formValues.total_salary) || 0).toFixed(2),
-        note: formValues.note === '' ? null : formValues.note,
+        name: values.name,
+        role: values.role,
+        phone: values.phone,
+        base_salary: values.base_salary.toString(),
+        teaching_days: Number(values.teaching_days || 0),
+        absence_days: Number(values.absence_days || 0),
+        received_salary: values.received_salary.toString(),
+        extra_teaching_days: Number(values.extra_teaching_days || 0),
+        extra_salary: values.extra_salary.toString(),
+        probation_days: Number(values.probation_days || 0),
+        probation_salary: values.probation_salary.toString(),
+        insurance_support: values.insurance_support.toString(),
+        responsibility_support: values.responsibility_support.toString(),
+        breakfast_support: values.breakfast_support.toString(),
+        skill_sessions: Number(values.skill_sessions || 0),
+        skill_salary: values.skill_salary.toString(),
+        english_sessions: Number(values.english_sessions || 0),
+        english_salary: values.english_salary.toString(),
+        new_students_list: values.new_students_list.toString(),
+        paid_amount: values.paid_amount.toString(),
+        total_salary: values.total_salary.toString(),
+        note: values.note,
       };
 
       await teacherApi.updateTeacher(teacherId, apiPayload);
@@ -275,7 +261,7 @@ export default function EditTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              <MultiSelect
+              <Select
                 label="Vai trò"
                 placeholder="Chọn vai trò"
                 required
@@ -286,16 +272,6 @@ export default function EditTeacherPage() {
                   input: {
                     minHeight: '36px',
                   },
-                }}
-                renderOption={({ option, ...others }) => {
-                  const roleOption = ROLE_OPTIONS.find(opt => opt.value === option.value);
-                  return (
-                    <div {...others}>
-                      <Badge color={roleOption?.color} variant="filled" size="sm" mr="xs">
-                        {option.label}
-                      </Badge>
-                    </div>
-                  );
                 }}
               />
             </Grid.Col>
@@ -359,6 +335,34 @@ export default function EditTeacherPage() {
             </Grid.Col>
           </Grid>
 
+          <Divider my="md" label="Lương thử việc" labelPosition="center" />
+
+          <Grid>
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <NumberInput
+                label="Số ngày thử việc"
+                placeholder="Nhập số ngày thử việc"
+                min={0}
+                decimalScale={1}
+                onKeyDown={handleKeyDown}
+                {...form.getInputProps('probation_days')}
+              />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <NumberInput
+                label="Lương thử việc (tính tự động)"
+                placeholder="Lương thử việc"
+                suffix=" ₫"
+                thousandSeparator=","
+                min={0}
+                readOnly
+                decimalScale={0}
+                onKeyDown={handleKeyDown}
+                {...form.getInputProps('probation_salary')}
+              />
+            </Grid.Col>
+          </Grid>
+
           <Divider my="md" label="Lương thêm" labelPosition="center" />
 
           <Grid>
@@ -385,6 +389,10 @@ export default function EditTeacherPage() {
                 {...form.getInputProps('extra_salary')}
               />
             </Grid.Col>
+          </Grid>
+
+          <Divider my="md" label="Hỗ trợ" labelPosition="center" />
+          <Grid>
             <Grid.Col span={{ base: 12, md: 4 }}>
               <NumberInput
                 label="Hỗ trợ bảo hiểm"

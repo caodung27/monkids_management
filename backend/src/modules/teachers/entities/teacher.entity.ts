@@ -17,7 +17,7 @@ export class Teacher {
   @Column({ name: 'name', type: 'varchar', nullable: true })
   name?: string;
 
-  @Column({ name: 'role', length: 100 })
+  @Column({ name: 'role', type: 'varchar', length: 100 })
   role: string;
 
   @Column({ name: 'phone', length: 20, nullable: true })
@@ -76,6 +76,24 @@ export class Teacher {
     default: 0,
   })
   extra_salary: number;
+
+  @Column({
+    name: 'probation_days',
+    type: 'numeric',
+    precision: 5,
+    scale: 1,
+    default: 0,
+  })
+  probation_days: number;
+
+  @Column({
+    name: 'probation_salary',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  probation_salary: number;
 
   @Column({
     name: 'insurance_support',

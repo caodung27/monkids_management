@@ -194,6 +194,16 @@ export default function TeacherReceipt() {
               <Table.Td style={{ padding: '3px 8px' }} fz="xs">Lương nhận được</Table.Td>
               <Table.Td style={{ padding: '3px 8px' }} fz="xs">{formatVND(teacher.received_salary)}</Table.Td>
             </Table.Tr>
+
+            <Table.Tr>
+              <Table.Td rowSpan={2} style={{ padding: '3px 8px' }} fz="xs">Mức lương thử việc</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }} fz="xs">Số ngày dạy thử việc</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }} fz="xs">{teacher.probation_days}</Table.Td>
+            </Table.Tr>
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }} fz="xs">Lương thử việc</Table.Td>
+              <Table.Td style={{ padding: '3px 8px' }} fz="xs">{formatVND(teacher.probation_salary)}</Table.Td>
+            </Table.Tr>
             
             <Table.Tr>
               <Table.Td rowSpan={2} style={{ padding: '3px 8px' }} fz="xs">Mức lương dạy thêm</Table.Td>
@@ -256,14 +266,16 @@ export default function TeacherReceipt() {
               <Table.Td fw={700} style={{ padding: '3px 8px' }} fz="xs">{formatVND(teacher.total_salary)}</Table.Td>
             </Table.Tr>
             
-            {teacher.note && (
-              <Table.Tr>
-                <Table.Td style={{ padding: '3px 8px' }} fz="xs">Ghi chú</Table.Td>
-                <Table.Td colSpan={2} style={{ padding: '3px 8px' }} fz="xs">{teacher.note}</Table.Td>
-              </Table.Tr>
-            )}
           </Table.Tbody>
         </Table>
+        {teacher.note && (
+          <Table mt={10} withTableBorder withColumnBorders fz="xs">
+            <Table.Tr>
+              <Table.Td style={{ padding: '3px 8px' }} fz="xs">Ghi chú</Table.Td>
+              <Table.Td colSpan={2} style={{ padding: '3px 8px' }} fz="xs">{teacher.note}</Table.Td>
+            </Table.Tr>
+          </Table>
+        )}
 
         <Box mt={10}>
           <Text ta="right" size="xs">Vĩnh Yên, ngày ... tháng ... năm ...</Text>

@@ -6,6 +6,7 @@ import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { ExportService } from './export.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import * as fs from 'fs';
 
 @ApiTags('export')
 @Controller('export')
@@ -40,12 +41,22 @@ export class ExportController {
         'Expires': '0',
       });
 
-      result.stream.pipe(res);
+      // Create read stream and pipe to response
+      const fileStream = fs.createReadStream(result.filePath);
+      fileStream.pipe(res);
 
-      result.stream.on('error', (error) => {
-        console.error('Error streaming data:', error);
+      // Clean up after sending
+      fileStream.on('end', () => {
+        fs.unlink(result.filePath, (err) => {
+          if (err) console.error('Error deleting temporary file:', err);
+        });
+      });
+
+      // Handle errors
+      fileStream.on('error', (error) => {
+        console.error('Error streaming file:', error);
         if (!res.headersSent) {
-          res.status(500).json({ message: 'Error streaming data' });
+          res.status(500).json({ message: 'Error streaming file' });
         }
       });
 

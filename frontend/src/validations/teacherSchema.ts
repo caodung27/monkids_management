@@ -35,6 +35,14 @@ export const teacherSchema = z.object({
     (val) => (val === '' ? 0 : Number(val)),
     z.number().nonnegative().default(0)
   ),
+  probation_days: z.preprocess(
+    (val) => (val === '' ? 0 : Number(val)),
+    z.number().nonnegative({ message: 'Số ngày thử việc không được âm' }).default(0)
+  ),
+  probation_salary: z.preprocess(
+    (val) => (val === '' ? 0 : Number(val)),
+    z.number().nonnegative().default(0)
+  ),
   insurance_support: z.preprocess(
     (val) => (val === '' ? 0 : Number(val)),
     z.number().nonnegative().default(0)
@@ -86,6 +94,7 @@ export const teacherApiSchema = teacherSchema.extend({
   base_salary: z.number().transform(val => val.toString()),
   received_salary: z.number().transform(val => val.toString()),
   extra_salary: z.number().transform(val => val.toString()),
+  probation_salary: z.number().transform(val => val.toString()),
   insurance_support: z.number().transform(val => val.toString()),
   responsibility_support: z.number().transform(val => val.toString()),
   breakfast_support: z.number().transform(val => val.toString()),
@@ -94,8 +103,8 @@ export const teacherApiSchema = teacherSchema.extend({
   new_students_list: z.number().transform(val => val.toString()),
   paid_amount: z.number().transform(val => val.toString()),
   total_salary: z.number().transform(val => val.toString()),
-  // Transform role string from form to string[] for API
-  role: z.string().transform(val => val.split(',').map(r => r.trim())),
+  // Role is already a string, no transformation needed
+  role: z.string()
 });
 
 // For create API payload, teacher_no and id are omitted

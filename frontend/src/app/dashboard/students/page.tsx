@@ -8,6 +8,7 @@ import { studentApi, exportApi } from '@/api/apiService';
 import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useStudents } from '@/api/hooks/useStudents';
 
 // Simple formatter for Vietnamese currency
 const formatVND = (value: string | number) => {
@@ -16,65 +17,29 @@ const formatVND = (value: string | number) => {
 
 export default function StudentsPage() {
   const { canEdit, canDelete, canPrint } = usePermissions();
-  const [students, setStudents] = useState<any[]>([]);
+  const {
+    students,
+    loading,
+    currentPage,
+    totalStudents,
+    itemsPerPage,
+    totalPages,
+    handlePageChange,
+    handlePageSizeChange,
+    fetchStudents
+  } = useStudents();
+  
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalStudents, setTotalStudents] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
-  const fetchStudents = async (page: number, pageSize: number = itemsPerPage) => {
-    setLoading(true);
-    try {
-      const response = await studentApi.getAllStudents(page, pageSize);
-      console.log('Fetched students data:', response);
-      
-      if (response && response.data) {
-        setStudents(response.data);
-        setTotalStudents(response.totalElements || 0);
-        setCurrentPage(response.currentPage || page);
-        setTotalPages(response.totalPages || Math.ceil((response.totalElements || 0) / pageSize));
-        // Clear selection when fetching new data
-        setSelectedRows([]);
-      } else {
-        console.error('Unexpected API response format:', response);
-        setStudents([]);
-      }
-    } catch (error) {
-      console.error('Error fetching students:', error);
-      setStudents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStudents(1, itemsPerPage);
-  }, [itemsPerPage]);
-
-  const handlePageChange = (page: number) => {
-    fetchStudents(page, itemsPerPage);
-    window.scrollTo(0, 0); // Scroll to top when changing page
-  };
-
-  const handlePageSizeChange = (value: string | null) => {
-    if (value) {
-      const newSize = parseInt(value);
-      setItemsPerPage(newSize);
-      setCurrentPage(1); // Reset to first page when changing page size
-    }
-  };
-
   const handleDeleteStudent = async (sequentialNumber: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa học sinh này không?')) {
       try {
         await studentApi.deleteStudent(sequentialNumber);
-        setStudents(prevStudents => prevStudents.filter(s => s.sequential_number !== sequentialNumber));
+        fetchStudents(currentPage, itemsPerPage);
       } catch (error) {
         console.error('Error deleting student:', error);
       }
@@ -91,9 +56,7 @@ export default function StudentsPage() {
       const result = await studentApi.bulkDeleteStudents(selectedRows);
       
       // Clear selection and update UI
-      setStudents(prevStudents => 
-        prevStudents.filter(s => !selectedRows.includes(s.sequential_number))
-      );
+      fetchStudents(currentPage, itemsPerPage);
       setSelectedRows([]);
       setIsConfirmDeleteOpen(false);
       
@@ -125,7 +88,7 @@ export default function StudentsPage() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allIds = filteredStudents.map(student => student.sequential_number);
+      const allIds = students.map(student => student.sequential_number);
       setSelectedRows(allIds);
     } else {
       setSelectedRows([]);

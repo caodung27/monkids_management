@@ -2,6 +2,7 @@ export function renderTeacherSalaryHTML(teacher: any, month: number, year: numbe
   function vnd(val: number) {
     return (Math.round(val ?? 0)).toLocaleString('vi-VN').replace(/\s/g, '') + 'đ';
   }
+  const day = new Date().getDate();
   return `
     <html>
     <head>
@@ -124,6 +125,15 @@ export function renderTeacherSalaryHTML(teacher: any, month: number, year: numbe
             <td class="right">${vnd(teacher.extra_salary)}</td>
           </tr>
           <tr>
+            <td rowspan="2">Lương thử việc</td>
+            <td>Số ngày thử việc</td>
+            <td class="right">${teacher.probation_days ?? 0}</td>
+          </tr>
+          <tr>
+            <td>Tiền thử việc</td>
+            <td class="right">${vnd(teacher.probation_salary)}</td>
+          </tr>
+          <tr>
             <td rowspan="3">Phụ cấp</td>
             <td>Hỗ trợ bảo hiểm</td>
             <td class="right">${vnd(teacher.insurance_support)}</td>
@@ -171,12 +181,12 @@ export function renderTeacherSalaryHTML(teacher: any, month: number, year: numbe
         </table>
 
         <div class="note">
-          GV có 25 ngày công vào tháng ${month < 10 ? '0' + month : month}/${year}.<br>
-          Nếu dạy nhiều hơn 25 ngày công sẽ được tính 150.000 / 1 ngày dạy thêm.
+          Trong 1 tháng, mỗi Giáo viên được nghỉ 4 buổi Chủ nhật và 2 buổi thứ 7 (Tổng 6 buổi nghỉ)
+          2 buổi thứ 7 được nghỉ dạy, nếu giáo viên đi dạy thêm được nhận tiền công như ngày thường
         </div>
 
         <div class="signature">
-          Vĩnh Yên, ngày ... tháng ... năm ...
+          Vĩnh Yên, ngày ${day} tháng ${month} năm ${year}
         </div>
       </div>
     </body>
