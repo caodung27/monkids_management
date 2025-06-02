@@ -151,9 +151,25 @@ export const authApi = {
 
   login: async (credentials: { username: string; password: string }) => {
     try {
-      const response = await axiosInstance.post('/api/auth/login', credentials);
+      console.log('Sending login request to:', `${API_URL}/auth/login`);
+      const response = await axiosInstance.post('/auth/login', credentials);
+      console.log('Login response:', response);
+      
+      if (response.data.access_token) {
+        TokenService.setAccessToken(response.data.access_token);
+      }
+      if (response.data.refresh_token) {
+        TokenService.setRefreshToken(response.data.refresh_token);
+      }
+      
       return response.data;
     } catch (error: any) {
+      console.error('Login error details:', {
+        error,
+        response: error.response,
+        request: error.request,
+        config: error.config
+      });
       throw error?.response?.data || error;
     }
   },
