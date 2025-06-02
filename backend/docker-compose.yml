@@ -11,9 +11,7 @@ services:
       - backend-network
     environment:
       - NODE_ENV=production
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-      - PUPPETEER_NO_SANDBOX=true
-      - DISPLAY=:99
+      - PORT=8000
       # Database Configuration
       - DATABASE_HOST=${DATABASE_HOST}
       - DATABASE_PORT=${DATABASE_PORT}
@@ -29,10 +27,11 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-      # Application Configuration
-      - PORT=${PORT}
-      - NODE_ENV=${NODE_ENV}
       - FRONTEND_URL=${FRONTEND_URL}
+      # Chrome/Puppeteer Configuration
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+      - PUPPETEER_NO_SANDBOX=true
+      - DISPLAY=:99
     security_opt:
       - seccomp=unconfined
     cap_add:
