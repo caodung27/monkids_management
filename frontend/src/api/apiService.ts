@@ -51,7 +51,11 @@ export const axiosInstance = axios.create({
 // Add request interceptor for error handling
 axiosInstance.interceptors.request.use(
   (config) => {
-    // Add any request preprocessing here
+    // Add authorization header if token exists
+    const token = TokenService.getAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {

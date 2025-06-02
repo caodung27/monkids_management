@@ -9,15 +9,17 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
 
-  // Enable CORS chỉ khi không phải production
-  if (process.env.NODE_ENV !== 'production') {
-    app.enableCors({
-      origin: 'http://localhost:3000',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-      credentials: true,
-    });
-  }
+  // CORS configuration for both development and production
+  const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? ['https://monkids.site', 'https://www.monkids.site']
+    : ['http://localhost:3000'];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+  });
 
   // Global prefix
   app.setGlobalPrefix('api');
