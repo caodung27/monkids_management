@@ -18,17 +18,33 @@ async function bootstrap() {
     origin: (origin, callback) => {
       const corsLogger = new Logger('CORS');
       corsLogger.debug(`Incoming request from origin: ${origin}`);
+      corsLogger.debug('Checking request headers...');
       
+      // If origin is undefined and we're in production, check X-Origin header
+      if (!origin && process.env.NODE_ENV === 'production') {
+        const req = arguments[1]?.req;
+        const xOrigin = req?.headers?.['x-origin'];
+        corsLogger.debug(`No origin found, checking X-Origin header: ${xOrigin}`);
+        origin = xOrigin || origin;
+      }
+
+      // In development, allow undefined origin
+      if (!origin && process.env.NODE_ENV !== 'production') {
+        corsLogger.debug('Development mode: allowing undefined origin');
+        callback(null, true);
+        return;
+      }
+
       if (!origin || allowedOrigins.includes(origin)) {
         corsLogger.debug(`Origin ${origin} is allowed`);
         callback(null, true);
       } else {
-        corsLogger.warn(`Origin ${origin} is not allowed`);
+        corsLogger.warn(`Origin ${origin} is not allowed. Allowed origins: ${allowedOrigins.join(', ')}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Origin'],
     credentials: true,
   });
 
