@@ -53,6 +53,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        mode: "non-blocking"
+        tag: "{{.Name}}"
 
   nginx:
     image: ${DOCKERHUB_USERNAME}/monkids-nginx:latest
@@ -74,8 +81,10 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
+        max-size: "10m"
         max-file: "3"
+        mode: "non-blocking"
+        tag: "{{.Name}}"
     deploy:
       resources:
         limits:
