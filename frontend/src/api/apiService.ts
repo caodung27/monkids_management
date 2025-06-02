@@ -44,7 +44,10 @@ export const axiosInstance = axios.create({
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'Origin': process.env.NODE_ENV === 'production' 
+      ? 'https://www.monkids.site' 
+      : 'http://localhost:3000'
   }
 });
 

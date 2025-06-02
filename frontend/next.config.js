@@ -46,11 +46,13 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Origin',
-            value: '*',
+            value: process.env.NODE_ENV === 'production' 
+              ? 'https://www.monkids.site' 
+              : 'http://localhost:3000',
           },
           {
             key: 'Access-Control-Allow-Methods',
-            value: 'GET,DELETE,PATCH,POST,PUT',
+            value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS',
           },
           {
             key: 'Access-Control-Allow-Headers',
