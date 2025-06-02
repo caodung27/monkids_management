@@ -1,4 +1,4 @@
-name: Deploy Backend
+name: Deploy to Production
 
 on:
   push:
@@ -6,6 +6,11 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-deploy.yml'
+    paths-ignore:
+      - '.github/workflows/docker-build.yml'
+
+# This workflow handles the full deployment process to production
+# Including building, pushing to Docker Hub, and deploying to EC2
 
 env:
   REGISTRY: docker.io
