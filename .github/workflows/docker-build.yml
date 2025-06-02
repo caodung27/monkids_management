@@ -20,15 +20,17 @@ env:
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-backend
   NGINX_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/monkids-nginx
   MAX_RETRIES: 3
-  RETRY_DELAY: 10
+  RETRY_DELAY: 5
+  HEALTH_CHECK_RETRIES: 3
+  HEALTH_CHECK_INTERVAL: 10
+  DEPLOY_TIMEOUT: 180
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
+    outputs:
+      backend_digest: ${{ steps.docker_build_backend.outputs.digest }}
+      nginx_digest: ${{ steps.docker_build_nginx.outputs.digest }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,16 +43,6 @@ jobs:
             image=moby/buildkit:latest
             network=host
 
-      - name: Check Docker Hub Authentication
-        id: docker_auth
-        run: |
-          echo "::debug::Checking Docker Hub credentials"
-          if ! echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin; then
-            echo "::error::Failed to authenticate with Docker Hub"
-            exit 1
-          fi
-          echo "::debug::Successfully authenticated with Docker Hub"
-
       - name: Log into Docker Hub
         uses: docker/login-action@v3
         with:
@@ -58,115 +50,41 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.BACKEND_IMAGE }}
-            ${{ env.NGINX_IMAGE }}
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=
-            type=ref,event=branch
-            type=ref,event=tag
-
-      - name: Build and push Backend image
-        uses: docker/build-push-action@v5
+      - name: Build Backend Image
         id: docker_build_backend
+        uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.BACKEND_IMAGE }}:latest
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
+          tags: ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
           build-args: |
             NODE_ENV=production
           outputs: type=docker,dest=/tmp/backend-image.tar
           platforms: linux/amd64
 
-      - name: Build and push Nginx image
-        uses: docker/build-push-action@v5
+      - name: Build Nginx Image
         id: docker_build_nginx
+        uses: docker/build-push-action@v5
         with:
           context: ./nginx
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.NGINX_IMAGE }}:latest
-            ${{ env.NGINX_IMAGE }}:${{ github.sha }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
+          tags: ${{ env.NGINX_IMAGE }}:latest
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
           outputs: type=docker,dest=/tmp/nginx-image.tar
           platforms: linux/amd64
 
-      - name: Verify images
-        if: success()
-        run: |
-          echo "::debug::Verifying backend image"
-          docker load < /tmp/backend-image.tar
-          docker inspect ${{ env.BACKEND_IMAGE }}:latest
-          
-          echo "::debug::Verifying nginx image"
-          docker load < /tmp/nginx-image.tar
-          docker inspect ${{ env.NGINX_IMAGE }}:latest
-
-      - name: Push images with retry
-        if: github.event_name != 'pull_request'
-        run: |
-          push_with_retry() {
-            local image=$1
-            local max_attempts=$2
-            local attempt=1
-            
-            while [ $attempt -le $max_attempts ]; do
-              echo "::debug::Pushing $image (attempt $attempt/$max_attempts)"
-              if docker push $image; then
-                echo "::debug::Successfully pushed $image"
-                return 0
-              fi
-              
-              echo "::warning::Push attempt $attempt failed, waiting before retry..."
-              sleep ${{ env.RETRY_DELAY }}
-              attempt=$((attempt + 1))
-            done
-            
-            echo "::error::Failed to push $image after $max_attempts attempts"
-            return 1
-          }
-          
-          push_with_retry "${{ env.BACKEND_IMAGE }}:latest" ${{ env.MAX_RETRIES }}
-          push_with_retry "${{ env.BACKEND_IMAGE }}:${{ github.sha }}" ${{ env.MAX_RETRIES }}
-          push_with_retry "${{ env.NGINX_IMAGE }}:latest" ${{ env.MAX_RETRIES }}
-          push_with_retry "${{ env.NGINX_IMAGE }}:${{ github.sha }}" ${{ env.MAX_RETRIES }}
-
-      - name: Debug on failure
-        if: failure()
-        run: |
-          echo "::group::Docker Version and Info"
-          docker version
-          docker info
-          echo "::endgroup::"
-          
-          echo "::group::Docker Hub Connection Test"
-          curl -v https://registry.hub.docker.com/v2/
-          echo "::endgroup::"
-          
-          echo "::group::Docker Images"
-          docker images
-          echo "::endgroup::"
-          
-          echo "::group::Docker Login Status"
-          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} 2>&1 || true
-          echo "::endgroup::"
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup SSH
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -177,361 +95,127 @@ jobs:
           chmod 600 ~/.ssh/key
           echo -e "Host ec2\n\tHostName $EC2_HOST\n\tUser $EC2_USERNAME\n\tIdentityFile ~/.ssh/key\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile=/dev/null" > ~/.ssh/config
 
+      - name: Prepare Deployment
+        run: |
+          mkdir -p deploy
+          cd deploy
+          
+          # Create optimized environment file
+          cat > .env << EOL
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          NODE_ENV=production
+          PORT=8000
+          
+          # Chrome/Puppeteer Configuration
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+          PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+          PUPPETEER_NO_SANDBOX=true
+          CHROME_PATH=/usr/bin/google-chrome
+          CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --headless=new
+          PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
+          
+          # System Configuration
+          DBUS_SESSION_BUS_ADDRESS=/dev/null
+          NO_PROXY=localhost,127.0.0.1
+          TMPDIR=/home/ec2-user/monkid_management/tmp
+          CHROME_CUSTOM_TMPDIR=/home/ec2-user/monkid_management/tmp/chrome
+          DISPLAY=:99
+          EOL
+          
+          # Copy configuration files
+          cp ../backend/docker-compose.yml .
+          mkdir -p nginx/conf.d
+          cp ../nginx/default.conf nginx/conf.d/
+          cp ../nginx/Dockerfile nginx/
+
       - name: Deploy to EC2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          # Create deployment directory
-          mkdir -p deploy
-          cd deploy
+          scp -r deploy/* deploy/.env ec2:~/monkid_management/
           
-          # Create environment file with Docker credentials
-          echo "DOCKERHUB_USERNAME=$DOCKERHUB_USERNAME" > .env
-          echo "NODE_ENV=production" >> .env
-          echo "PORT=8000" >> .env
-          
-          # Add Chrome/Puppeteer specific configurations
-          echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true" >> .env
-          echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome" >> .env
-          echo "PUPPETEER_NO_SANDBOX=true" >> .env
-          echo "CHROME_PATH=/usr/bin/google-chrome" >> .env
-          echo "CHROME_DBUS_ARGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --headless=new --disable-setuid-sandbox --no-zygote --disable-dbus --disable-notifications --disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints --disable-dev-tools" >> .env
-          echo "PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --disable-extensions --disable-dbus --disable-dev-tools" >> .env
-          
-          # Add system environment variables
-          echo "DBUS_SESSION_BUS_ADDRESS=/dev/null" >> .env
-          echo "NO_PROXY=localhost,127.0.0.1" >> .env
-          echo "TMPDIR=/home/ec2-user/monkid_management/tmp" >> .env
-          echo "TERM=xterm" >> .env
-          echo "DISABLE_DBUS=true" >> .env
-          echo "DISPLAY=:99" >> .env
-          echo "CHROME_CUSTOM_TMPDIR=/home/ec2-user/monkid_management/tmp/chrome" >> .env
-          
-          # Append existing env if available
-          if [ -f ../backend/.env ]; then
-            cat ../backend/.env >> .env
-          fi
-          
-          # Copy docker-compose.yml from backend directory
-          if [ -f ../backend/docker-compose.yml ]; then
-            cp ../backend/docker-compose.yml .
-          else
-            echo "Error: docker-compose.yml not found in backend directory"
-            exit 1
-          fi
-          
-          # Copy nginx configuration
-          mkdir -p nginx/conf.d
-          if [ ! -f ../nginx/default.conf ]; then
-            echo "Error: default.conf not found"
-            exit 1
-          fi
-          cp ../nginx/default.conf nginx/conf.d/
-          cp ../nginx/Dockerfile nginx/
-          
-          # Create data directory
-          mkdir -p data
-          
-          echo "Copying files to EC2..."
-          ssh ec2 "mkdir -p ~/monkid_management"
-          scp -r * .env ec2:~/monkid_management/
-          
-          echo "Starting deployment on EC2..."
           ssh ec2 "
             set -ex
             cd ~/monkid_management
             
-            # Stop and remove existing containers
-            docker-compose down --remove-orphans || true
-            docker rm -f monkids_backend nginx || true
+            # Stop existing containers
+            docker-compose down --remove-orphans
             docker system prune -f --volumes
             
-            # Create required directories and files
-            mkdir -p data
-            mkdir -p tmp/.local/share/applications
-            mkdir -p tmp/.X11-unix
-            mkdir -p tmp/chrome
+            # Prepare directories
+            mkdir -p {data,tmp/{.local/share/applications,.X11-unix,chrome}}
             touch tmp/.local/share/applications/mimeapps.list
-            touch tmp/.Xauthority
-            
-            # Set proper permissions for our own directories
             chmod -R 777 tmp
             
-            echo 'Checking configuration files...'
-            if [ ! -f nginx/default.conf ]; then
-              echo 'Error: default.conf not found'
-              ls -la nginx/
-              exit 1
-            fi
-            if [ ! -f .env ]; then
-              echo 'Error: .env not found'
-              ls -la
-              exit 1
-            fi
-            if [ ! -f docker-compose.yml ]; then
-              echo 'Error: docker-compose.yml not found'
-              ls -la
-              exit 1
-            fi
-            
-            echo 'Creating Docker network...'
-            docker network create backend-network || true
-            
-            echo 'Verifying docker-compose configuration...'
-            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose config
-            
-            echo 'Logging into Docker Hub...'
-            docker login -u '$DOCKERHUB_USERNAME' -p '$DOCKERHUB_TOKEN'
-            
-            echo 'Pulling images...'
-            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose pull --quiet
-            
-            echo 'Starting backend...'
-            DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d backend
-            
-            echo 'Initial backend logs:'
-            docker logs monkids_backend || true
-            
-            check_container_health() {
-              container_id=\$(docker ps -qf 'name=^monkids_backend$' 2>/dev/null)
-              if [ -z \"\$container_id\" ]; then
-                echo 'Container not found'
-                docker ps -a
-                return 1
-              fi
-              
-              container_status=\$(docker inspect --format='{{.State.Status}}' \"\$container_id\" 2>/dev/null)
-              health_status=\$(docker inspect --format='{{.State.Health.Status}}' \"\$container_id\" 2>/dev/null)
-              
-              echo \"Container status: \${container_status:-unknown}, health: \${health_status:-unknown}\"
-              
-              if [ \"\$container_status\" != 'running' ]; then
-                echo \"Container is not running (status: \${container_status:-unknown})\"
-                docker logs \"\$container_id\" || true
-                return 1
-              fi
-              
-              if ! docker logs \"\$container_id\" 2>&1 | grep -q 'Application is running on port: 8000'; then
-                echo 'Application startup message not found in logs'
-                docker logs \"\$container_id\" --tail 50 || true
-                return 1
-              fi
-              
-              for i in {1..3}; do
-                if wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
-                  echo 'Health endpoint check passed'
-                  return 0
-                fi
-                echo \"Health check attempt \$i failed, retrying...\"
-                sleep 2
-              done
-              
-              echo 'Health endpoint check failed after 3 attempts'
-              return 1
-            }
-            
-            attempts=0
-            max_attempts=5
-            
-            echo 'Waiting for backend to be healthy...'
-            while [ \$attempts -lt \$max_attempts ]
-            do
-              attempts=\$((attempts + 1))
-              echo \"Health check attempt \$attempts/\$max_attempts\"
-              
-              sleep 30
-              
-              if check_container_health; then
-                echo 'Backend is healthy!'
-                break
-              fi
-              
-              docker ps -a
-              docker inspect monkids_backend --format='{{.State.Health}}' || true
-              
-              if [ \$attempts -eq \$max_attempts ]; then
-                echo \"Backend failed to become healthy after \$max_attempts attempts\"
-                docker ps -a
-                docker logs monkids_backend --tail 100 || true
+            # Verify files
+            for file in nginx/default.conf .env docker-compose.yml; do
+              if [ ! -f \$file ]; then
+                echo \"Error: \$file not found\"
                 exit 1
               fi
             done
             
-            echo 'Performing final health verification...'
-            if check_container_health; then
-              echo 'Backend container is verified healthy and ready for nginx'
+            # Setup network
+            docker network create backend-network || true
+            
+            # Login to Docker Hub
+            echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login -u '${{ secrets.DOCKERHUB_USERNAME }}' --password-stdin
+            
+            # Pull and start services
+            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}' docker-compose pull --quiet
+            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}' docker-compose up -d
+            
+            # Monitor deployment
+            start_time=\$(date +%s)
+            
+            while true; do
+              current_time=\$(date +%s)
+              elapsed_time=\$((current_time - start_time))
               
-              # Wait a bit more to ensure backend is fully ready
-              sleep 15
-              
-              echo 'Starting nginx...'
-              DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' docker-compose up -d nginx
-              
-              echo 'Waiting for nginx to start...'
-              sleep 20
-              
-              echo 'Checking nginx container...'
-              if ! docker ps | grep -q nginx; then
-                echo 'Nginx failed to start'
-                docker logs nginx || true
-                docker inspect nginx || true
+              if [ \$elapsed_time -gt ${{ env.DEPLOY_TIMEOUT }} ]; then
+                echo 'Deployment timeout exceeded'
+                docker-compose logs
                 exit 1
               fi
               
-              echo 'Testing nginx configuration...'
-              if ! docker exec nginx nginx -t; then
-                echo 'Nginx configuration test failed'
-                docker logs nginx || true
-                docker exec nginx cat /etc/nginx/conf.d/default.conf || true
-                exit 1
+              if docker-compose ps | grep -q '(healthy)'; then
+                echo 'Services are healthy'
+                break
               fi
               
-              echo 'Testing nginx connectivity...'
-              if ! wget -q --spider --timeout=10 http://localhost/api/health 2>/dev/null; then
-                echo 'Nginx is not responding'
-                echo 'Network status:'
-                docker network ls
-                docker network inspect monkid_management_backend-network || true
-                echo 'Container status:'
-                docker ps -a
-                echo 'Nginx logs:'
-                docker logs nginx || true
-                echo 'Backend logs:'
-                docker logs monkids_backend || true
-                exit 1
-              fi
-              
-              if docker ps | grep -q 'nginx' && docker ps | grep -q 'monkids_backend'; then
-                echo 'Both services are running'
-                docker ps --format '{{.Names}} - {{.Status}}'
-                
-                echo 'Testing nginx proxy to backend...'
-                if wget -q --spider --timeout=10 http://localhost/api/health 2>/dev/null; then
-                  echo 'Nginx proxy test successful'
-                else
-                  echo 'Nginx proxy test failed'
-                  echo 'Nginx configuration:'
-                  docker exec nginx cat /etc/nginx/conf.d/default.conf || true
-                  echo 'Nginx logs:'
-                  docker logs nginx || true
-                  echo 'Network status:'
-                  docker network ls
-                  docker network inspect monkid_management_backend-network || true
-                  exit 1
-                fi
-              else
-                echo 'Services failed to start properly'
-                docker ps -a
-                docker logs monkids_backend --tail 50 || true
-                docker logs nginx --tail 50 || true
-                exit 1
-              fi
-            else
-              echo 'Final verification failed - container is not healthy'
-              docker ps -a
-              docker logs monkids_backend || true
+              echo 'Waiting for services to be healthy...'
+              sleep ${{ env.HEALTH_CHECK_INTERVAL }}
+            done
+            
+            # Final verification
+            if ! wget -q --spider --timeout=5 --no-check-certificate https://api.monkids.site/api/health; then
+              echo 'Health check failed'
+              docker-compose logs
               exit 1
             fi
             
-            echo 'Network Status:'
-            docker network ls
-            docker network inspect monkid_management_backend-network || true
-            
-            echo 'Directory Structure:'
-            ls -la
-            
-            echo 'Environment File (without secrets):'
-            cat .env | grep -v -E 'PASSWORD|SECRET|TOKEN'
+            echo 'Deployment successful'
           "
 
       - name: Verify Deployment
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          sleep 15
-          
           for i in {1..3}; do
-            echo "Verification attempt $i/3..."
-            
             if ssh ec2 "
-              set -ex
               cd ~/monkid_management
               
-              # Verify nginx configuration
-              if ! docker exec nginx nginx -t 2>/dev/null; then
-                echo 'Nginx configuration test failed'
-                docker exec nginx nginx -t
-                exit 1
-              fi
-              
-              # Check backend health
-              if ! docker ps | grep -q 'monkids_backend.*healthy'; then
-                echo 'Backend container is not healthy'
-                docker logs monkids_backend
-                exit 1
-              fi
-              
-              if ! wget -q --spider --timeout=5 http://localhost:8000/api/health 2>/dev/null; then
-                echo 'Backend health check failed'
-                docker logs --tail 50 monkids_backend
-                exit 1
-              fi
-              
-              # Check nginx health
-              if ! docker ps | grep -q 'nginx.*healthy'; then
-                echo 'Nginx container is not healthy'
-                docker logs nginx
-                exit 1
-              fi
-              
-              # Check HTTPS endpoint
-              if ! wget -q --spider --timeout=5 --no-check-certificate https://api.monkids.site/api/health 2>/dev/null; then
-                echo 'HTTPS health check failed'
-                docker logs --tail 50 nginx
-                exit 1
-              fi
-              
-              echo 'All health checks passed'
+              # Quick health checks
+              docker-compose ps --format json | grep -q '\"Health\": \"healthy\"' && \
+              wget -q --spider --timeout=5 --no-check-certificate https://api.monkids.site/api/health
             "; then
               echo "Deployment verified successfully"
               exit 0
             fi
             
-            [ $i -eq 3 ] && { 
-              echo "=== Final Status ==="
-              ssh ec2 "
-                set -ex
-                cd ~/monkid_management
-                
-                echo 'Container Status:'
-                docker ps -a
-                
-                echo 'Backend Logs:'
-                docker logs --tail 50 monkids_backend || true
-                
-                echo 'Nginx Logs:'
-                docker logs --tail 50 nginx || true
-                
-                echo 'Nginx Configuration Test:'
-                docker exec nginx nginx -t || true
-                
-                echo 'Docker Compose Config:'
-                docker-compose config
-                
-                echo 'Network Status:'
-                docker network inspect backend-network || true
-                
-                echo 'Directory Structure:'
-                ls -la
-                
-                echo 'Environment File (without secrets):'
-                cat .env | grep -v -E 'PASSWORD|SECRET|TOKEN'
-              "
-              echo "Verification failed after 3 attempts"
-              exit 1
-            }
-            
-            echo "Waiting before next attempt..."
-            sleep 15
-          done 
+            echo "Verification attempt $i failed, retrying..."
+            sleep ${{ env.RETRY_DELAY }}
+          done
+          
+          echo "Deployment verification failed"
+          ssh ec2 "cd ~/monkid_management && docker-compose logs"
+          exit 1 
