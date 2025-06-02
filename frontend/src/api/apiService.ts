@@ -50,7 +50,8 @@ export const axiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     'Origin': FRONTEND_URL,
-    'X-Origin': FRONTEND_URL
+    'X-Origin': FRONTEND_URL,
+    'X-Requested-With': 'XMLHttpRequest'
   }
 });
 
@@ -70,7 +71,13 @@ axiosInstance.interceptors.request.use(
     // Add Referer header
     if (typeof window !== 'undefined') {
       config.headers.Referer = window.location.href;
+      // Also set Origin from window.location if available
+      config.headers.Origin = window.location.origin;
+      config.headers['X-Origin'] = window.location.origin;
     }
+    
+    // Log headers for debugging
+    console.debug('Request headers:', config.headers);
     
     return config;
   },
@@ -81,7 +88,11 @@ axiosInstance.interceptors.request.use(
 
 // Add response interceptor for error handling
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Log response headers for debugging
+    console.debug('Response headers:', response.headers);
+    return response;
+  },
   (error) => {
     if (error.code === 'ERR_NETWORK') {
       return Promise.reject({

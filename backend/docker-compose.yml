@@ -10,6 +10,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8000
+      # CORS Configuration
+      - CORS_ENABLED=true
+      - ALLOWED_ORIGINS=https://www.monkids.site
+      - CORS_CREDENTIALS=true
+      - CORS_METHODS=GET,POST,PUT,DELETE,PATCH,OPTIONS
       # Database Configuration
       - DATABASE_HOST=172.31.14.122
       - DATABASE_PORT=5432
@@ -25,7 +30,7 @@ services:
       - GOOGLE_CLIENT_ID=542269964324-6kmatcq5rp19lefr3eiouu60hkqdg6jk.apps.googleusercontent.com
       - GOOGLE_CLIENT_SECRET=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
       - GOOGLE_CALLBACK_URL=https://api.monkids.site/api/auth/google/callback
-      - FRONTEND_URL=https://www.monkids.site/
+      - FRONTEND_URL=https://www.monkids.site
       # Chrome/Puppeteer Configuration
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
       - PUPPETEER_NO_SANDBOX=true
@@ -78,6 +83,11 @@ services:
         restart: true
     networks:
       - backend-network
+    environment:
+      - NGINX_HOST=api.monkids.site
+      - ALLOWED_ORIGIN=https://www.monkids.site
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=8000
     logging:
       driver: "json-file"
       options:
@@ -101,6 +111,9 @@ services:
 networks:
   backend-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   backend-cache:
