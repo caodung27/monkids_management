@@ -10,48 +10,13 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const corsLogger = new Logger('CORS');
 
-  // CORS configuration for both development and production
-  const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? ['https://www.monkids.site']
-    : ['http://localhost:3000'];
-
+  // Simple CORS configuration
   app.enableCors({
-    origin: (origin, callback) => {
-      corsLogger.debug(`Incoming request from origin: ${origin}`);
-      
-      // In development, allow all origins
-      if (process.env.NODE_ENV !== 'production') {
-        corsLogger.debug('Development mode: allowing all origins');
-        callback(null, true);
-        return;
-      }
-
-      // In production, check against allowed origins
-      if (!origin) {
-        corsLogger.debug('No origin provided, allowing request');
-        callback(null, true);
-        return;
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        corsLogger.debug(`Origin ${origin} is allowed`);
-        callback(null, true);
-      } else {
-        corsLogger.warn(`Origin ${origin} is not allowed`);
-        callback(null, allowedOrigins[0]);
-      }
-    },
+    origin: 'https://www.monkids.site',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'Accept',
-      'Origin',
-      'X-Requested-With'
-    ],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
     exposedHeaders: ['Content-Length', 'Content-Range'],
-    maxAge: 3600
   });
 
   // Global prefix
