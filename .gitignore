@@ -38,14 +38,12 @@ dist/
 **/.env.*
 
 # Không ignore file .env và .env.example
-!.env
+.env
 !.env.example
-!backend/.env
-!backend/.env.example
-!backend/.env.prod
-!frontend/.env
-!frontend/.env.example
-!frontend/.env.prod
+backend/.env
+backend/.env.prod
+frontend/.env
+frontend/.env.example
 
 # Debug
 npm-debug.log*
