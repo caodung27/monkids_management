@@ -277,6 +277,7 @@ export default function StudentsPage() {
                         student.classroom === 'Mon1' ? 'blue' : 
                         student.classroom === 'Mon2' ? 'green' :
                         student.classroom === 'Mon3' ? 'orange' :
+                        student.classroom === 'Mon4' ? 'purple' :
                         'gray'
                       }>
                         {student.classroom}

@@ -468,7 +468,7 @@ export default function EditStudentPage() {
                 label="Tiền ăn 1 buổi"
                 placeholder="Nhập tiền ăn 1 buổi"
                 value={form.values.meal_fee_per_ticket}
-                onChange={(val) => form.setFieldValue('meal_fee_per_ticket', !val && val !== 0 ? 0 : Number(val))}
+                onChange={(val) => form.setFieldValue('meal_fee_per_ticket', !val && val !== 0 ? MEAL_FEE_PER_TICKET : Number(val))}
                 suffix=" ₫"
                 thousandSeparator=","
                 decimalScale={0}
