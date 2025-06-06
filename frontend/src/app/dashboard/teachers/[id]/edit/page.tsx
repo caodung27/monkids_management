@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
+import { Container, Title, Paper, Button, Group, TextInput, NumberInput, MultiSelect, Grid, Text, Divider, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { teacherApi } from '@/api/apiService';
 import { Teacher, TeacherApiPayload } from '@/types';
@@ -27,6 +27,7 @@ export default function EditTeacherPage() {
   const router = useRouter();
   const teacherId = params.id as string;
   const [loading, setLoading] = useState(true);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   
   // Refs to store initial values of source fields from API
   const initialExtraTeachingDays = useRef<number | null>(null);
@@ -44,16 +45,18 @@ export default function EditTeacherPage() {
     const fetchTeacherData = async () => {
       try {
         const teacher = await teacherApi.getTeacher(teacherId);
-        form.setValues({
-          ...teacher,
-          role: teacher.role // No need to split, keep as string
-        });
+
+        // Set form values with teacher data
+        form.setValues(teacher);
+
+        // Split role string into array for MultiSelect
+        const roles = teacher.role ? teacher.role.split(', ').filter(Boolean) : [];
+        setSelectedRoles(roles);
 
         // Store initial source values after form is populated
         initialExtraTeachingDays.current = teacher.extra_teaching_days;
         initialSkillSessions.current = teacher.skill_sessions;
         initialEnglishSessions.current = teacher.english_sessions;
-
       } catch (error) {
         console.error('Failed to fetch teacher:', error);
       } finally {
@@ -63,6 +66,12 @@ export default function EditTeacherPage() {
 
     fetchTeacherData();
   }, [teacherId, form.setValues]);
+
+  // When selected roles change, update the form's role field as a comma-separated string
+  useEffect(() => {
+    const rolesString = selectedRoles.join(', ');
+    form.setFieldValue('role', rolesString);
+  }, [selectedRoles, form]);
 
   useEffect(() => {
     // Destructure all relevant values from form.values
@@ -139,8 +148,7 @@ export default function EditTeacherPage() {
       total_salary: calculated_total_salary,
     }));
   }, [
-    // Dependencies: all values from form.values that are read in this effect.
-    // The refs (initialExtraTeachingDays, etc.) are stable and don't need to be dependencies.
+    // Dependencies remain unchanged
     form.values.base_salary,
     form.values.teaching_days,
     form.values.absence_days,
@@ -159,7 +167,6 @@ export default function EditTeacherPage() {
     form.values.insurance_support,
     form.values.responsibility_support,
     form.values.breakfast_support,
-    // form.setValues is stable from useForm, initialXXX refs are stable.
   ]);
 
   const handleSubmit = async (values: Teacher) => {
@@ -168,7 +175,7 @@ export default function EditTeacherPage() {
 
       const apiPayload: TeacherApiPayload = {
         name: values.name,
-        role: values.role,
+        role: values.role, // Already a comma-separated string from form state
         phone: values.phone,
         base_salary: values.base_salary.toString(),
         teaching_days: Number(values.teaching_days || 0),
@@ -255,18 +262,21 @@ export default function EditTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              <Select
+              {/* Use MultiSelect but keep the form field as string */}
+              <MultiSelect
                 label="Vai trò"
                 placeholder="Chọn vai trò"
                 required
                 data={ROLE_OPTIONS}
+                value={selectedRoles}
+                onChange={setSelectedRoles}
                 onKeyDown={handleKeyDown}
-                {...form.getInputProps('role')}
                 styles={{
                   input: {
                     minHeight: '36px',
                   },
                 }}
+                clearable
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
@@ -554,4 +564,4 @@ export default function EditTeacherPage() {
       </Paper>
     </Container>
   );
-} 
+}

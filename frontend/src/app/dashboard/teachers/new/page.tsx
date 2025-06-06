@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Container, Title, Paper, Button, Group, TextInput, NumberInput, Select, Grid, Text, Divider, Textarea } from '@mantine/core';
+import { Container, Title, Paper, Button, Group, TextInput, NumberInput, MultiSelect, Grid, Text, Divider, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { teacherApi } from '@/api/apiService';
 import { Teacher, TeacherApiPayload } from '@/types';
@@ -49,6 +49,8 @@ const ROLE_OPTIONS: RoleOption[] = [
 
 export default function NewTeacherPage() {
   const router = useRouter();
+  // Add state for selected roles
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   
   const form = useForm<TeacherFormValues>({
     validate: {
@@ -56,6 +58,13 @@ export default function NewTeacherPage() {
       role: (value) => (!value ? 'Vui lòng chọn vai trò' : null),
     },
   });
+
+  // When selected roles change, update the form's role field as a comma-separated string
+  const handleRoleChange = (newRoles: string[]) => {
+    setSelectedRoles(newRoles);
+    const rolesString = newRoles.join(', ');
+    form.setFieldValue('role', rolesString);
+  };
 
   useEffect(() => {
     // Destructure all relevant values from form.values
@@ -163,7 +172,7 @@ export default function NewTeacherPage() {
 
       const apiPayload: TeacherApiPayload = {
         ...values,
-        role: values.role,
+        role: values.role, // Already a comma-separated string from the effect
         phone: values.phone === '' ? null : values.phone,
         base_salary: (Number(values.base_salary) || 0).toFixed(2),
         teaching_days: Number(values.teaching_days) || 0,
@@ -263,18 +272,21 @@ export default function NewTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              <Select
+              {/* Replace Select with MultiSelect */}
+              <MultiSelect
                 label="Vai trò"
                 placeholder="Chọn vai trò"
                 required
                 data={ROLE_OPTIONS}
+                value={selectedRoles}
+                onChange={handleRoleChange}
                 onKeyDown={handleKeyDown}
-                {...form.getInputProps('role')}
                 styles={{
                   input: {
                     minHeight: '36px',
                   },
                 }}
+                clearable
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
@@ -338,6 +350,7 @@ export default function NewTeacherPage() {
             </Grid.Col>
           </Grid>
 
+          {/* The rest of the form remains unchanged */}
           <Divider my="md" label="Lương thử việc" labelPosition="center" />
 
           <Grid>
@@ -564,4 +577,4 @@ export default function NewTeacherPage() {
       </Paper>
     </Container>
   );
-} 
+}
