@@ -14,11 +14,17 @@ import { vi } from 'date-fns/locale';
 import { MEAL_FEE_PER_TICKET } from '@/constants/fees';
 import 'react-day-picker/dist/style.css';
 
+// Extend form type to include meal_fee_per_ticket
+type NewStudentFormValues = Omit<Student, 'student_id' | 'sequential_number'> & { 
+  birthdate: Date | null;
+  meal_fee_per_ticket: number;
+};
+
 export default function NewStudentPage() {
   const router = useRouter();
   const [calendarOpened, setCalendarOpened] = useState(false);
   
-  const form = useForm<Omit<Student, 'student_id' | 'sequential_number'> & { birthdate: Date | null }>({
+  const form = useForm<Omit<Student, 'student_id' | 'sequential_number'> & { birthdate: Date | null; meal_fee_per_ticket: number }>({
     validate: {
       name: (value) => (!value ? 'Vui lòng nhập tên học sinh' : null),
       classroom: (value) => (!value ? 'Vui lòng chọn lớp' : null),
@@ -49,12 +55,14 @@ export default function NewStudentPage() {
       const studentFund = Number(values.student_fund) || 0;
       const facilityFee = Number(values.facility_fee) || 0;
       const paidAmount = Number(values.paid_amount) || 0;
+      // Use custom meal fee per ticket value
+      const mealFeePerTicket = Number(values.meal_fee_per_ticket) || MEAL_FEE_PER_TICKET;
 
       // Calculate final fee after discount and round to whole number
       const finalFee = Math.round(baseFee * (1 - discountPercentage));
       
-      // Calculate meal fee: (pm - pt) * MEAL_FEE_PER_TICKET
-      const mealFee = Math.round((pmValue - ptValue) * MEAL_FEE_PER_TICKET);
+      // Calculate meal fee with custom meal fee per ticket
+      const mealFee = Math.round((pmValue - ptValue) * mealFeePerTicket);
       
       // Calculate total fee: sum of all fees
       // Further ensure all values are valid before calculation
@@ -103,19 +111,19 @@ export default function NewStudentPage() {
     form.values.utilities_fee,
     form.values.pt,
     form.values.pm,
+    form.values.meal_fee_per_ticket, // Add dependency on meal_fee_per_ticket
     form.values.eng_fee,
     form.values.skill_fee,
     form.values.student_fund,
     form.values.facility_fee,
     form.values.paid_amount,
-    // Add potentially missing dependencies from form.values read in the effect for the check
     form.values.final_fee, 
     form.values.meal_fee, 
     form.values.total_fee, 
     form.values.remaining_amount
   ]);
 
-  const handleSubmit = async (formValues: Omit<Student, 'student_id' | 'sequential_number'> & { birthdate: Date | null }) => {
+  const handleSubmit = async (formValues: NewStudentFormValues) => {
     try {
       // Verify authentication first
       const { TokenService } = await import('@/api/apiService');
@@ -134,6 +142,12 @@ export default function NewStudentPage() {
       const baseFee = Number(formValues.base_fee || 0);
       const discountPercentage = Number(formValues.discount_percentage) || 0;
       const finalFee = Math.round(baseFee * (1 - discountPercentage));
+
+      // Use custom meal fee per ticket value for API payload calculation
+      const mealFeePerTicket = Number(formValues.meal_fee_per_ticket || MEAL_FEE_PER_TICKET);
+      const pmValue = Number(formValues.pm || 0);
+      const ptValue = Number(formValues.pt || 0);
+      const mealFee = Math.round((pmValue - ptValue) * mealFeePerTicket);
       
       const apiPayload = {
         name: formValues.name,
@@ -145,7 +159,7 @@ export default function NewStudentPage() {
         utilities_fee: Number(formValues.utilities_fee || 0),
         pt: Number(formValues.pt || 0),
         pm: Number(formValues.pm || 0),
-        meal_fee: Number(formValues.meal_fee || 0),
+        meal_fee: mealFee, // Use calculated meal fee
         eng_fee: Number(formValues.eng_fee || 0),
         skill_fee: Number(formValues.skill_fee || 0),
         student_fund: Number(formValues.student_fund || 0),
@@ -153,6 +167,8 @@ export default function NewStudentPage() {
         total_fee: Number(formValues.total_fee || 0),
         paid_amount: Number(formValues.paid_amount || 0),
         remaining_amount: Number(formValues.remaining_amount || 0),
+        // Add meal_fee_per_ticket if your API supports it
+        // meal_fee_per_ticket: mealFeePerTicket,
       };
       
       console.log('Authentication check before creating student:', {
@@ -171,9 +187,8 @@ export default function NewStudentPage() {
     } catch (error: any) {
       console.error('Error saving student:', error);
       
-      // Check for authentication errors (401)
+      // Error handling remains the same
       if (error.response && error.response.status === 401) {
-        // Authentication error
         notifications.show({
           title: 'Lỗi xác thực',
           message: 'Bạn cần đăng nhập lại để thực hiện thao tác này.',
@@ -182,7 +197,6 @@ export default function NewStudentPage() {
         return;
       }
       
-      // Permission error (403)
       if (error.response && error.response.status === 403) {
         notifications.show({
           title: 'Không có quyền',
@@ -192,7 +206,6 @@ export default function NewStudentPage() {
         return;
       }
       
-      // Other errors
       notifications.show({
         title: 'Lỗi',
         message: `Có lỗi xảy ra khi thêm học sinh: ${error.response?.data?.detail || 'Vui lòng thử lại.'}`,
@@ -225,6 +238,7 @@ export default function NewStudentPage() {
           onSubmit={handleFormSubmit}
           onKeyDown={handleKeyDown}
         >
+          {/* Personal information section - unchanged */}
           <Grid>
             <Grid.Col span={{ base: 12, md: 6 }}>
               <TextInput
@@ -249,6 +263,7 @@ export default function NewStudentPage() {
                 {...form.getInputProps('classroom')}
               />
             </Grid.Col>
+            {/* Birthday picker - unchanged */}
             <Grid.Col span={{ base: 12, md: 6 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <label style={{ 
@@ -312,6 +327,7 @@ export default function NewStudentPage() {
 
           <Divider my="md" label="Học phí" labelPosition="center" />
 
+          {/* Fee section - unchanged */}
           <Grid>
             <Grid.Col span={{ base: 12, md: 4 }}>
               <NumberInput
@@ -362,6 +378,7 @@ export default function NewStudentPage() {
 
           <Divider my="md" label="Tiền ăn" labelPosition="center" />
 
+          {/* Meal fee section - UPDATED with meal_fee_per_ticket */}
           <Grid>
             <Grid.Col span={{ base: 12, md: 3 }}>
               <NumberInput
@@ -383,7 +400,19 @@ export default function NewStudentPage() {
                 decimalScale={1}
               />
             </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 6 }}>
+            <Grid.Col span={{ base: 12, md: 3 }}>
+              <NumberInput
+                label="Tiền ăn 1 buổi"
+                placeholder="Nhập tiền ăn 1 buổi"
+                suffix=" ₫"
+                thousandSeparator=","
+                onKeyDown={handleKeyDown}
+                decimalScale={0}
+                min={0}
+                {...form.getInputProps('meal_fee_per_ticket')}
+              />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, md: 3 }}>
               <NumberInput
                 label="Tổng tiền ăn"
                 placeholder="Tổng tiền ăn"
@@ -396,6 +425,7 @@ export default function NewStudentPage() {
             </Grid.Col>
           </Grid>
 
+          {/* The rest of the form remains unchanged */}
           <Divider my="md" label="Học tự chọn" labelPosition="center" />
 
           <Grid>
@@ -505,4 +535,4 @@ export default function NewStudentPage() {
       </Paper>
     </Container>
   );
-} 
+}

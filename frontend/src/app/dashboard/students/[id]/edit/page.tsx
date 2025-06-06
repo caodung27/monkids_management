@@ -18,6 +18,7 @@ import 'react-day-picker/dist/style.css';
 // No, we still need birthdate as Date for the form
 interface StudentEditFormValues extends Omit<Student, 'birthdate' | 'student_id' | 'sequential_number'> {
   birthdate: Date | null;
+  meal_fee_per_ticket: number;
   // All other fee fields will be numbers as in Student type
 }
 
@@ -91,6 +92,7 @@ export default function EditStudentPage() {
           total_fee: Number(student.total_fee),
           paid_amount: Number(student.paid_amount),
           remaining_amount: Number(student.remaining_amount),
+          meal_fee_per_ticket: Number(student.meal_fee) / Math.max(1, (Number(student.pm) - Number(student.pt))) || MEAL_FEE_PER_TICKET,
         });
       } catch (error) {
         console.error('Failed to fetch student:', error);
@@ -121,12 +123,13 @@ export default function EditStudentPage() {
       const studentFund = Number(values.student_fund) || 0;
       const facilityFee = Number(values.facility_fee) || 0;
       const paidAmount = Number(values.paid_amount) || 0;
+      const mealFeePerTicket = Number(values.meal_fee_per_ticket) || MEAL_FEE_PER_TICKET; // Use user input or default
 
       // Calculate final fee after discount and round to whole number
       const finalFee = Math.round(baseFee * (1 - discountPercentage));
       
       // Calculate meal fee: (pm - pt) * MEAL_FEE_PER_TICKET
-      const mealFee = Math.round((pmValue - ptValue) * MEAL_FEE_PER_TICKET);
+      const mealFee = Math.round((pmValue - ptValue) * mealFeePerTicket);
       
       // Calculate total fee: sum of all fees
       const totalFee = Math.round(
@@ -159,6 +162,7 @@ export default function EditStudentPage() {
     form.values.utilities_fee,
     form.values.pt,
     form.values.pm,
+    form.values.meal_fee_per_ticket,
     form.values.eng_fee,
     form.values.skill_fee,
     form.values.student_fund,
@@ -183,6 +187,12 @@ export default function EditStudentPage() {
       const discountPercentage = Number(values.discount_percentage) || 0;
       const finalFee = Math.round(baseFee * (1 - discountPercentage));
 
+      // Use meal_fee_per_ticket from form values
+      const mealFeePerTicket = Number(values.meal_fee_per_ticket || 0);
+      const pmValue = Number(values.pm || 0);
+      const ptValue = Number(values.pt || 0);
+      const mealFee = Math.round((pmValue - ptValue) * mealFeePerTicket);
+
       const apiPayload: StudentApiUpdatePayload = {
         name: values.name,
         classroom: values.classroom,
@@ -193,7 +203,7 @@ export default function EditStudentPage() {
         utilities_fee: Number(values.utilities_fee || 0),
         pt: Number(values.pt || 0),
         pm: Number(values.pm || 0),
-        meal_fee: Number(values.meal_fee || 0),
+        meal_fee: mealFee,
         eng_fee: Number(values.eng_fee || 0),
         skill_fee: Number(values.skill_fee || 0),
         student_fund: Number(values.student_fund || 0),
@@ -448,6 +458,19 @@ export default function EditStudentPage() {
                 value={form.values.pm}
                 onChange={(val) => form.setFieldValue('pm', !val && val !== 0 ? 0 : Number(val))}
                 decimalScale={1}
+                min={0}
+                onKeyDown={handleKeyDown}
+              />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, md: 3 }}>
+              <NumberInput
+                label="Tiền ăn 1 buổi"
+                placeholder="Nhập tiền ăn 1 buổi"
+                value={form.values.meal_fee_per_ticket}
+                onChange={(val) => form.setFieldValue('meal_fee_per_ticket', !val && val !== 0 ? 0 : Number(val))}
+                suffix=" ₫"
+                thousandSeparator=","
+                decimalScale={0}
                 min={0}
                 onKeyDown={handleKeyDown}
               />

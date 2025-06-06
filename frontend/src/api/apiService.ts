@@ -36,10 +36,7 @@ export const TokenService = {
   }
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monkids.site';
-const FRONTEND_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://www.monkids.site' 
-  : 'http://localhost:3000';
+const API_URL = process.env.NODE_ENV === 'production' ? process.env.NEXT_PUBLIC_API_URL : 'http://localhost:8000/api';
 
 // Create axios instance with default config
 export const axiosInstance = axios.create({

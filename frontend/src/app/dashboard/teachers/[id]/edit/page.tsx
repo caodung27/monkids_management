@@ -76,12 +76,6 @@ export default function EditTeacherPage() {
       english_sessions: v_english_sessions,
       paid_amount: v_paid_amount,
       new_students_list: v_new_students_list,
-      extra_salary: v_current_extra_salary,
-      probation_salary: v_current_probation_salary,
-      skill_salary: v_current_skill_salary,
-      english_salary: v_current_english_salary,
-      received_salary: v_current_received_salary,
-      total_salary: v_current_total_salary
     } = form.values;
 
     // Ensure numeric inputs, defaulting to 0 if undefined/null/empty string
@@ -108,7 +102,7 @@ export default function EditTeacherPage() {
       : 0;
 
     // Calculate probation salary
-    const final_probation_salary = probation_days_val * 200000;
+    const final_probation_salary = probation_days_val * 150000;
 
     // Calculate skill salary
     const final_skill_salary = skill_sessions_val * 125000;
