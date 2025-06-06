@@ -317,6 +317,7 @@ export default function EditStudentPage() {
                   { value: 'Mon2', label: 'Mon2' },
                   { value: 'Mon3', label: 'Mon3' },
                   { value: 'Mon4', label: 'Mon4' },
+                  { value: 'Unknown', label: 'Unknown' },
                 ]}
                 {...form.getInputProps('classroom')}
               />
