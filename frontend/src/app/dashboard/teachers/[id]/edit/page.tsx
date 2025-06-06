@@ -7,13 +7,17 @@ import { useForm } from '@mantine/form';
 import { teacherApi } from '@/api/apiService';
 import { Teacher, TeacherApiPayload } from '@/types';
 import { IconArrowLeft, IconDeviceFloppy } from '@tabler/icons-react';
-import { formatVND } from '@/utils/formatters';
 import { notifications } from '@mantine/notifications';
 
 interface RoleOption {
   value: string;
   label: string;
   color: string;
+}
+
+// Extend Teacher interface to include the new field
+interface TeacherWithProbationRate extends Teacher {
+  probation_salary_per_session?: number;
 }
 
 const ROLE_OPTIONS: RoleOption[] = [
@@ -34,7 +38,7 @@ export default function EditTeacherPage() {
   const initialSkillSessions = useRef<number | null>(null);
   const initialEnglishSessions = useRef<number | null>(null);
   
-  const form = useForm<Teacher>({
+  const form = useForm<TeacherWithProbationRate>({
     validate: {
       name: (value) => (!value ? 'Vui lòng nhập tên giáo viên' : null),
       role: (value) => (!value ? 'Vui lòng chọn vai trò' : null),
@@ -47,7 +51,10 @@ export default function EditTeacherPage() {
         const teacher = await teacherApi.getTeacher(teacherId);
 
         // Set form values with teacher data
-        form.setValues(teacher);
+        form.setValues({
+          ...teacher,
+          probation_salary_per_session: 150000, // Default value if not present
+        });
 
         // Split role string into array for MultiSelect
         const roles = teacher.role ? teacher.role.split(', ').filter(Boolean) : [];
@@ -81,6 +88,7 @@ export default function EditTeacherPage() {
       absence_days: v_absence_days,
       extra_teaching_days: v_extra_teaching_days,
       probation_days: v_probation_days,
+      probation_salary_per_session: v_probation_salary_per_session, // Get the new field
       skill_sessions: v_skill_sessions,
       english_sessions: v_english_sessions,
       paid_amount: v_paid_amount,
@@ -93,6 +101,7 @@ export default function EditTeacherPage() {
     const absence_days = Number(v_absence_days) || 0;
     const extra_teaching_days_val = Number(v_extra_teaching_days) || 0;
     const probation_days_val = Number(v_probation_days) || 0;
+    const probation_salary_per_session = Number(v_probation_salary_per_session) || 150000; // Use the new field with default
     const skill_sessions_val = Number(v_skill_sessions) || 0;
     const english_sessions_val = Number(v_english_sessions) || 0;
     const paid_amount = Number(v_paid_amount) || 0;
@@ -110,8 +119,8 @@ export default function EditTeacherPage() {
       ? Math.round((base_salary / totalWorkDaysAndAbsence) * extra_teaching_days_val)
       : 0;
 
-    // Calculate probation salary
-    const final_probation_salary = probation_days_val * 150000;
+    // Calculate probation salary using the new field
+    const final_probation_salary = probation_days_val * probation_salary_per_session;
 
     // Calculate skill salary
     const final_skill_salary = skill_sessions_val * 125000;
@@ -154,6 +163,7 @@ export default function EditTeacherPage() {
     form.values.absence_days,
     form.values.extra_teaching_days,
     form.values.probation_days,
+    form.values.probation_salary_per_session, // Add new dependency
     form.values.skill_sessions,
     form.values.english_sessions,
     form.values.paid_amount,
@@ -169,9 +179,9 @@ export default function EditTeacherPage() {
     form.values.breakfast_support,
   ]);
 
-  const handleSubmit = async (values: Teacher) => {
+  const handleSubmit = async (values: TeacherWithProbationRate) => {
     try {
-      const { id, ...formValues } = values;
+      const { id, probation_salary_per_session, ...formValues } = values;
 
       const apiPayload: TeacherApiPayload = {
         name: values.name,
@@ -262,7 +272,6 @@ export default function EditTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              {/* Use MultiSelect but keep the form field as string */}
               <MultiSelect
                 label="Vai trò"
                 placeholder="Chọn vai trò"
@@ -291,6 +300,7 @@ export default function EditTeacherPage() {
 
           <Divider my="md" label="Lương cơ bản" labelPosition="center" />
 
+          {/* Basic salary section remains unchanged */}
           <Grid>
             <Grid.Col span={{ base: 12, md: 4 }}>
               <NumberInput
@@ -341,7 +351,20 @@ export default function EditTeacherPage() {
 
           <Divider my="md" label="Lương thử việc" labelPosition="center" />
 
+          {/* Modified probation section with new field */}
           <Grid>
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <NumberInput
+                label="Lương thử việc 1 buổi"
+                placeholder="Nhập lương thử việc 1 buổi"
+                suffix=" ₫"
+                thousandSeparator=","
+                min={0}
+                decimalScale={0}
+                onKeyDown={handleKeyDown}
+                {...form.getInputProps('probation_salary_per_session')}
+              />
+            </Grid.Col>
             <Grid.Col span={{ base: 12, md: 4 }}>
               <NumberInput
                 label="Số ngày thử việc"
@@ -367,6 +390,7 @@ export default function EditTeacherPage() {
             </Grid.Col>
           </Grid>
 
+          {/* Rest of the form remains unchanged */}
           <Divider my="md" label="Lương thêm" labelPosition="center" />
 
           <Grid>
@@ -434,7 +458,7 @@ export default function EditTeacherPage() {
               />
             </Grid.Col>
           </Grid>
-
+          
           <Divider my="md" label="Dạy môn tự chọn" labelPosition="center" />
 
           <Grid>

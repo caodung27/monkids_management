@@ -22,6 +22,7 @@ interface TeacherFormValues {
   extra_salary: number;
   probation_days: number;
   probation_salary: number;
+  probation_salary_per_session: number; // Add the new field
   insurance_support: number;
   responsibility_support: number;
   breakfast_support: number;
@@ -49,7 +50,6 @@ const ROLE_OPTIONS: RoleOption[] = [
 
 export default function NewTeacherPage() {
   const router = useRouter();
-  // Add state for selected roles
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   
   const form = useForm<TeacherFormValues>({
@@ -74,6 +74,7 @@ export default function NewTeacherPage() {
       absence_days: v_absence_days,
       extra_teaching_days: v_extra_teaching_days,
       probation_days: v_probation_days,
+      probation_salary_per_session: v_probation_salary_per_session, // Add the new field
       skill_sessions: v_skill_sessions,
       english_sessions: v_english_sessions,
       paid_amount: v_paid_amount,
@@ -86,6 +87,7 @@ export default function NewTeacherPage() {
     const absence_days = Number(v_absence_days) || 0;
     const extra_teaching_days_val = Number(v_extra_teaching_days) || 0;
     const probation_days_val = Number(v_probation_days) || 0;
+    const probation_salary_per_session = Number(v_probation_salary_per_session) || 150000; // Use the new field
     const skill_sessions_val = Number(v_skill_sessions) || 0;
     const english_sessions_val = Number(v_english_sessions) || 0;
     const paid_amount = Number(v_paid_amount) || 0;
@@ -103,8 +105,8 @@ export default function NewTeacherPage() {
       ? Math.round((base_salary / totalWorkDaysAndAbsence) * extra_teaching_days_val)
       : 0;
 
-    // Calculate probation salary
-    const final_probation_salary = probation_days_val * 150000;
+    // Calculate probation salary using the per session rate instead of hardcoded value
+    const final_probation_salary = probation_days_val * probation_salary_per_session;
 
     // Calculate skill salary
     const final_skill_salary = skill_sessions_val * 125000;
@@ -141,11 +143,13 @@ export default function NewTeacherPage() {
       total_salary: calculated_total_salary,
     }));
   }, [
+    // Add the new field to dependencies
     form.values.base_salary,
     form.values.teaching_days,
     form.values.absence_days,
     form.values.extra_teaching_days,
     form.values.probation_days,
+    form.values.probation_salary_per_session, // Add this dependency
     form.values.skill_sessions,
     form.values.english_sessions,
     form.values.paid_amount,
@@ -170,9 +174,12 @@ export default function NewTeacherPage() {
         return;
       }
 
+      // Exclude the new field from API payload since backend doesn't have this field yet
+      const { probation_salary_per_session, ...valuesForApi } = values;
+
       const apiPayload: TeacherApiPayload = {
-        ...values,
-        role: values.role, // Already a comma-separated string from the effect
+        ...valuesForApi,
+        role: values.role, // Already a comma-separated string
         phone: values.phone === '' ? null : values.phone,
         base_salary: (Number(values.base_salary) || 0).toFixed(2),
         teaching_days: Number(values.teaching_days) || 0,
@@ -272,7 +279,6 @@ export default function NewTeacherPage() {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              {/* Replace Select with MultiSelect */}
               <MultiSelect
                 label="Vai trò"
                 placeholder="Chọn vai trò"
@@ -350,10 +356,22 @@ export default function NewTeacherPage() {
             </Grid.Col>
           </Grid>
 
-          {/* The rest of the form remains unchanged */}
           <Divider my="md" label="Lương thử việc" labelPosition="center" />
 
           <Grid>
+            {/* Add new field for probation salary per session */}
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <NumberInput
+                label="Lương thử việc 1 buổi"
+                placeholder="Nhập lương thử việc 1 buổi"
+                suffix=" ₫"
+                thousandSeparator=","
+                min={0}
+                decimalScale={0}
+                onKeyDown={handleKeyDown}
+                {...form.getInputProps('probation_salary_per_session')}
+              />
+            </Grid.Col>
             <Grid.Col span={{ base: 12, md: 4 }}>
               <NumberInput
                 label="Số ngày thử việc"
