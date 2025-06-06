@@ -11,13 +11,14 @@ async function bootstrap() {
   const corsLogger = new Logger('CORS');
 
   // Simple CORS configuration
-  app.enableCors({
-    origin: 'https://www.monkids.site',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-    exposedHeaders: ['Content-Length', 'Content-Range'],
-  });
+  if (process.env.NODE_ENV !== 'production') {
+    app.enableCors({
+      origin: ['http://localhost:3000', 'https://www.monkids.site'],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    });
+  }
 
   // Global prefix
   app.setGlobalPrefix('api');
