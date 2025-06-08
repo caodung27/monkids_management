@@ -27,6 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDisclosure, useToggle } from '@mantine/hooks';
 import { authApi } from '@/api/apiService';
 import { usePathname } from 'next/navigation';
+import Logger from '@/libs/logger';
 
 interface HeaderProps {
   opened: boolean;

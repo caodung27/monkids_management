@@ -10,6 +10,7 @@ import { Bar, Pie, Line } from 'react-chartjs-2';
 import { Chart, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, PointElement, LineElement } from 'chart.js';
 import { Student } from '@/types';
 import { StatsCard } from '@/components/StatsCard';
+import Logger from '@/libs/logger';
 Chart.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, PointElement, LineElement);
 
 // Navigation feature cards

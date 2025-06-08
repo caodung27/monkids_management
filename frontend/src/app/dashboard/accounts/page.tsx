@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { notifications } from '@mantine/notifications';
 import { profileApi } from '@/api/apiService';
 import { ProfileData } from '@/types';
+import Logger from '@/libs/logger';
 
 export default function AccountsPage() {
   const { canEdit, canDelete } = usePermissions();

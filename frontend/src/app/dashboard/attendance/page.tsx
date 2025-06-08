@@ -6,6 +6,7 @@ import { useTeachers } from '@/api/hooks/useTeachers';
 import { teacherApi, attendanceApi } from '@/api/apiService';
 import { IconChevronLeft, IconChevronRight, IconCheck, IconX, IconClock, IconDeviceFloppy, IconUsers, IconUserExclamation } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import Logger from '@/libs/logger';
 
 // Attendance status types
 enum AttendanceStatus {

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import Logger from '@/libs/logger';
 
 interface Props {
   children: React.ReactNode;

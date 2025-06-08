@@ -9,6 +9,7 @@ import { Pagination } from '@/components/Pagination';
 import { notifications } from '@mantine/notifications';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useStudents } from '@/api/hooks/useStudents';
+import Logger from '@/libs/logger';
 
 // Simple formatter for Vietnamese currency
 const formatVND = (value: string | number) => {

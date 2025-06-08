@@ -1,3 +1,4 @@
+import Logger from '@/libs/logger';
 import { useState, useEffect } from 'react';
 
 /**
