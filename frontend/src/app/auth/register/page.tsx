@@ -71,7 +71,6 @@ export default function RegisterPage() {
           }
         }
       } catch (error) {
-        console.error('Error checking auth:', error);
       } finally {
         setIsChecking(false);
       }
@@ -118,7 +117,6 @@ export default function RegisterPage() {
         router.push('/auth/login');
       }
     } catch (error: any) {
-      console.error('Registration error:', error);
       notifications.show({
         title: 'Lỗi',
         message: error.message || 'Đăng ký thất bại, vui lòng thử lại',

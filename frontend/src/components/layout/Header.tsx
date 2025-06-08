@@ -54,7 +54,7 @@ export default function Header({ opened, toggle }: HeaderProps) {
     try {
       await logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      Logger.error('Logout error:', error);
     }
   };
 

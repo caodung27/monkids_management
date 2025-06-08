@@ -107,7 +107,7 @@ export default function DashboardPage() {
         if (studentsRes?.data) setStudents(studentsRes.data);
         if (teachersRes?.data) setTeachers(teachersRes.data);
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        Logger.error('Error fetching dashboard data:', error);
       } finally {
         setLoading(false);
       }
@@ -121,7 +121,7 @@ export default function DashboardPage() {
         const data = await statsApi.getMonthlyStats();
         setStats(data);
       } catch (error) {
-        console.error('Error fetching stats:', error);
+        Logger.error('Error fetching stats:', error);
       }
     };
 

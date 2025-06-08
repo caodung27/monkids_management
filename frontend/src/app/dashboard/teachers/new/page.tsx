@@ -9,6 +9,7 @@ import { Teacher, TeacherApiPayload } from '@/types';
 import { IconArrowLeft, IconDeviceFloppy } from '@tabler/icons-react';
 import { formatVND } from '@/utils/formatters';
 import { notifications } from '@mantine/notifications';
+import Logger from '@/libs/logger';
 
 interface TeacherFormValues {
   name: string;
@@ -210,7 +211,7 @@ export default function NewTeacherPage() {
       });
       router.push('/dashboard/teachers');
     } catch (error: any) {
-      console.error('Error creating teacher:', error);
+      Logger.error('Error creating teacher:', error);
       
       // Check for authentication errors (401)
       if (error.response && error.response.status === 401) {

@@ -41,7 +41,7 @@ export default function AccountsPage() {
       fetchAccounts();
       setIsEditModalOpen(false);
     } catch (error: any) {
-      console.error('Error updating account:', error);
+      Logger.error('Error updating account:', error);
       notifications.show({
         title: 'Lỗi',
         message: error.response?.data?.message || 'Không thể cập nhật tài khoản',
@@ -63,7 +63,7 @@ export default function AccountsPage() {
       // Refresh accounts list
       fetchAccounts();
     } catch (error: any) {
-      console.error('Error deleting account:', error);
+      Logger.error('Error deleting account:', error);
       notifications.show({
         title: 'Lỗi',
         message: error.response?.data?.message || 'Không thể xóa tài khoản',
@@ -82,7 +82,7 @@ export default function AccountsPage() {
       const data = await profileApi.getAllUsers();
       setAccounts(data);
     } catch (error: any) {
-      console.error('Error fetching accounts:', error);
+      Logger.error('Error fetching accounts:', error);
       notifications.show({
         title: 'Lỗi',
         message: error.response?.data?.message || 'Không thể tải danh sách tài khoản',

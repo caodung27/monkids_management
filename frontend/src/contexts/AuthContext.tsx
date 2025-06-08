@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { authApi, profileApi, TokenService } from '@/api/apiService';
 import { notifications } from '@mantine/notifications';
 import { ProfileData } from '@/types';
+import Logger from '@/libs/logger';
 
 // Define user types
 export interface UserPermissions {
@@ -67,14 +68,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to check and refresh auth state
   const checkAndRefreshAuth = async (): Promise<boolean> => {
     try {
-      console.log('AuthProvider: Checking and refreshing auth');
 
       // Check if we have tokens
       const accessToken = TokenService.getAccessToken();
       const refreshToken = TokenService.getRefreshToken();
       
       if (!accessToken && !refreshToken) {
-        console.log('AuthProvider: No tokens found');
         setIsLoading(false);
         return false;
       }
@@ -91,7 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setIsLoading(false);
           return true;
         } catch (refreshError) {
-          console.error('AuthProvider: Token refresh failed', refreshError);
+          Logger.error('AuthProvider: Token refresh failed', refreshError);
           setIsLoading(false);
           return false;
         }
@@ -111,7 +110,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setIsLoading(false);
           return true;
         } catch (error) {
-          console.error('AuthProvider: Failed to get user data', error);
           setIsLoading(false);
           return false;
         }
@@ -120,7 +118,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
       return !!user;
     } catch (error) {
-      console.error('AuthProvider: Error checking auth:', error);
       setIsLoading(false);
       return false;
     }
@@ -153,7 +150,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         window.location.href = '/dashboard';
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      Logger.error('Login error:', error);
       notifications.show({
         title: 'Lỗi',
         message: error.message || 'Đăng nhập thất bại',
@@ -184,7 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       router.push('/auth/login');
     } catch (error) {
-      console.error('Logout error:', error);
+      Logger.error('Logout error:', error);
       notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi xảy ra khi đăng xuất',
@@ -211,7 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         router.replace('/dashboard');
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      Logger.error('Registration error:', error);
       setIsLoading(false);
       throw error;
     }
@@ -223,7 +220,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userData = await authApi.getCurrentUser();
       setUser(userData);
     } catch (error) {
-      console.error('Error updating user info:', error);
+      Logger.error('Error updating user info:', error);
     }
   };
 
@@ -231,7 +228,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const initAuth = async () => {
       if (!initComplete.current) {
-        console.log('AuthProvider: Initializing auth state');
         // Skip auth check if on public paths
         const pathname = window.location.pathname;
         const isPublicPath = ['/auth/login', '/auth/register']
@@ -248,7 +244,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Set up periodic token validation with longer interval
     tokenValidationInterval.current = setInterval(() => {
-      console.log('AuthProvider: Periodic token validation');
       // Skip validation if on public paths
       const pathname = window.location.pathname;
       const isPublicPath = ['/auth/login', '/auth/register']

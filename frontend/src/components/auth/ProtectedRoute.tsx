@@ -42,7 +42,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         const hasRequiredRole = requiredRoles.some(role => user.role === role);
         
         if (!hasRequiredRole) {
-          console.log('ProtectedRoute: User lacks required role, redirecting to dashboard');
           router.replace('/dashboard');
         }
         

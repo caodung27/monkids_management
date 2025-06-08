@@ -58,7 +58,6 @@ export default function LoginPage() {
         // No tokens, allow login
         setIsChecking(false);
       } catch (error) {
-        console.error('Login page: Error checking auth:', error);
         setIsChecking(false);
       }
     };
@@ -81,7 +80,6 @@ export default function LoginPage() {
       setIsSubmitting(true);
       await login(values.email, values.password);
     } catch (error) {
-      console.error('Login error:', error);
     } finally {
       setIsSubmitting(false);
     }

@@ -1,16 +1,10 @@
+import Logger from '@/libs/logger';
 import axios from 'axios';
 
 export const useCloudinary = () => {
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'xoo1ylwx';
   const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY || '186557826259341';
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'drpbgq0fj';
-
-  // Debug logging to identify environment variable issues
-  console.log('Cloudinary config:', {
-    cloudName: cloudName ? 'defined' : 'missing',
-    uploadPreset: uploadPreset ? 'defined' : 'missing',
-    apiKey: apiKey ? 'defined' : 'missing',
-  });
 
   const uploadMedia = async (file: File, type: string = 'image') => {
     if (!cloudName) {
@@ -21,7 +15,6 @@ export const useCloudinary = () => {
       throw new Error('Cloudinary upload preset is missing. Please set NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET in .env');
     }
 
-    console.log('Starting upload to Cloudinary:', { fileSize: file.size, fileType: file.type });
 
     const formData = new FormData();
     formData.append('file', file);
@@ -40,7 +33,7 @@ export const useCloudinary = () => {
 
       return response.data;
     } catch (error: any) {
-      console.error('Cloudinary upload error:', {
+      Logger.error('Cloudinary upload error:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,

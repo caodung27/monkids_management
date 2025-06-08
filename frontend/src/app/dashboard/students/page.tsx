@@ -41,7 +41,7 @@ export default function StudentsPage() {
         await studentApi.deleteStudent(sequentialNumber);
         fetchStudents(currentPage, itemsPerPage);
       } catch (error) {
-        console.error('Error deleting student:', error);
+        Logger.error('Error deleting student:', error);
       }
     }
   };
@@ -67,7 +67,7 @@ export default function StudentsPage() {
         color: 'green',
       });
     } catch (error) {
-      console.error('Error deleting selected students:', error);
+      Logger.error('Error deleting selected students:', error);
       
       // Show error notification
       notifications.show({

@@ -34,6 +34,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Cookies from 'js-cookie';
 import { TokenService } from '@/api/apiService';
+import Logger from '@/libs/logger';
 
 const profileSchema = z.object({
   fullName: z.string().min(2, 'Full name is required'),
@@ -105,20 +106,16 @@ export default function NewProfilePage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      console.log('[PROFILE_NEW_DEBUG] useEffect checkAuth started.');
       try {
         // Get email from localStorage or cookies
         const emailFromStorage = localStorage.getItem('userEmail') || Cookies.get('userEmail');
-        console.log(`[PROFILE_NEW_DEBUG] Email from storage: ${emailFromStorage}`);
         if (emailFromStorage) {
           setUserEmail(emailFromStorage);
         }
 
         // Check if user is authenticated
         const hasToken = TokenService.hasAnyToken();
-        console.log(`[PROFILE_NEW_DEBUG] TokenService.hasAnyToken(): ${hasToken}`);
         if (!hasToken) {
-          console.log('[PROFILE_NEW_DEBUG] No tokens found, redirecting to /login.');
           router.push('/login');
           return;
         }
@@ -126,22 +123,16 @@ export default function NewProfilePage() {
         // Check if user is new
         const isNewUserLocalStorage = localStorage.getItem('isNewUser');
         const isNewUserCookie = Cookies.get('isNewUser');
-        console.log(`[PROFILE_NEW_DEBUG] localStorage 'isNewUser': '${isNewUserLocalStorage}'`);
-        console.log(`[PROFILE_NEW_DEBUG] Cookie 'isNewUser': '${isNewUserCookie}'`);
 
         const isNewUserStored = isNewUserLocalStorage === 'true' || isNewUserCookie === 'true';
-        console.log(`[PROFILE_NEW_DEBUG] Parsed isNewUserStored boolean: ${isNewUserStored}`);
         
         if (!isNewUserStored) {
-          console.log('[PROFILE_NEW_DEBUG] User is not new (isNewUserStored is false), redirecting to /dashboard.');
           router.push('/dashboard');
           return;
         }
 
-        console.log('[PROFILE_NEW_DEBUG] Auth checks passed, proceeding with page display.');
         setIsChecking(false);
       } catch (error) {
-        console.error('[PROFILE_NEW_DEBUG] Error checking auth:', error);
         setError('Error checking authentication status');
         setIsChecking(false);
       }
@@ -274,14 +265,7 @@ export default function NewProfilePage() {
 
       const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
       try {
-        console.log('Starting upload with file size:', file.size, 'bytes');
-        console.log('Environment variables check:', {
-          cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ? 'defined' : 'undefined',
-          uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ? 'defined' : 'undefined',
-        });
-        
         const result = await uploadMedia(file, 'image');
-        console.log('Upload succeeded:', result);
         
         setProfileData(prevProfileData => ({
           ...prevProfileData,
@@ -294,7 +278,7 @@ export default function NewProfilePage() {
           color: 'green',
         });
       } catch (error: any) {
-        console.error('Upload error details:', {
+        Logger.error('Upload error details:', {
           message: error.message,
           response: error.response?.data,
           status: error.response?.status,

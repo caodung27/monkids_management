@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { MEAL_FEE_PER_TICKET } from '@/constants/fees';
 import 'react-day-picker/dist/style.css';
+import Logger from '@/libs/logger';
 
 // Extend form type to include meal_fee_per_ticket
 type NewStudentFormValues = Omit<Student, 'student_id' | 'sequential_number'> & { 
@@ -171,12 +172,6 @@ export default function NewStudentPage() {
         // meal_fee_per_ticket: mealFeePerTicket,
       };
       
-      console.log('Authentication check before creating student:', {
-        hasAccessToken: !!localStorage.getItem('accessToken'),
-        hasRefreshToken: !!localStorage.getItem('refreshToken'),
-        authSuccess: localStorage.getItem('auth_successful')
-      });
-      
       await studentApi.createStudent(apiPayload);
       notifications.show({
         title: 'Thành công',
@@ -185,7 +180,7 @@ export default function NewStudentPage() {
       });
       router.push('/dashboard/students');
     } catch (error: any) {
-      console.error('Error saving student:', error);
+      Logger.error('Error saving student:', error);
       
       // Error handling remains the same
       if (error.response && error.response.status === 401) {

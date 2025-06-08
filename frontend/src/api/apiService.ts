@@ -74,9 +74,6 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Log headers for debugging
-    console.debug('Request headers:', config.headers);
-    
     return config;
   },
   (error) => {
@@ -87,8 +84,6 @@ axiosInstance.interceptors.request.use(
 // Add response interceptor for error handling
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Log response headers for debugging
-    console.debug('Response headers:', response.headers);
     return response;
   },
   (error) => {
@@ -157,7 +152,6 @@ export const checkTokenAndRefreshIfNeeded = async (): Promise<boolean> => {
     const response = await authApi.refreshToken(refreshToken);
     return !!response.access_token;
   } catch (error) {
-    console.error('Token refresh failed:', error);
     return false;
   }
 };
@@ -176,9 +170,7 @@ export const authApi = {
 
   login: async (credentials: { email: string; password: string }) => {
     try {
-      console.log('Sending login request to:', `${API_URL}/auth/login`);
       const response = await axiosInstance.post('/auth/login', credentials);
-      console.log('Login response:', response);
       
       if (response.data.access_token) {
         TokenService.setAccessToken(response.data.access_token);
@@ -189,12 +181,6 @@ export const authApi = {
       
       return response.data;
     } catch (error: any) {
-      console.error('Login error details:', {
-        error,
-        response: error.response,
-        request: error.request,
-        config: error.config
-      });
       throw error?.response?.data || error;
     }
   },
@@ -237,7 +223,6 @@ export const authApi = {
       const response = await axiosInstance.get('/auth/permissions/');
       return response.data;
     } catch (error) {
-      console.error('getUserPermissions: Error', error);
       throw error;
     }
   },
@@ -247,7 +232,6 @@ export const authApi = {
       const response = await axiosInstance.post('/auth/token/introspect');
       return response.data;
     } catch (error) {
-      console.error('introspectToken: Error', error);
       return { active: false, error };
     }
   },
@@ -257,7 +241,6 @@ export const authApi = {
       const response = await axiosInstance.post('/auth/token/verify');
       return response.data;
     } catch (error) {
-      console.error('verifyToken: Error', error);
       return { valid: false, error };
     }
   },
@@ -274,7 +257,6 @@ export const authApi = {
       TokenService.setAccessToken(access_token);
       return { access_token, user };
     } catch (error) {
-      console.error('refreshToken: Error', error);
       throw error;
     }
   }

@@ -42,7 +42,6 @@ export const useTeachers = () => {
         setTotalTeachers(0);
       }
     } catch (error) {
-      console.error('Error fetching teachers:', error);
       setTeachers([]);
       setTotalTeachers(0);
       notifications.show({

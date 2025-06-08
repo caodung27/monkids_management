@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { authApi, TokenService } from '@/api/apiService';
 import { Loader, Center, Text, Button } from '@mantine/core';
+import Logger from '@/libs/logger';
 
 interface AuthCheckProps {
   children: React.ReactNode;
@@ -38,7 +39,6 @@ export default function AuthCheck({ children }: AuthCheckProps) {
         const hasToken = TokenService.checkTokensExist();
           
         if (!hasToken) {
-          console.log('AuthCheck: No tokens found');
           setIsAuthorized(false);
           setIsChecking(false);
           router.push('/auth/login');
@@ -53,12 +53,11 @@ export default function AuthCheck({ children }: AuthCheckProps) {
         setIsChecking(false);
         
         if (!isValid) {
-          console.log('AuthCheck: Token invalid');
           TokenService.clearTokens();
           router.push('/auth/login');
         }
       } catch (error) {
-        console.error('AuthCheck: Error checking authorization', error);
+        Logger.error('AuthCheck: Error checking authorization', error);
         setIsAuthorized(false);
         setIsChecking(false);
         router.push('/auth/login');

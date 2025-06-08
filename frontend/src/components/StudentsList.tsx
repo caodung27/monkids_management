@@ -3,6 +3,7 @@ import { Table, Text, Group, Button, Loader, Alert } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { studentApi } from '@/api/apiService';
 import { Pagination } from './Pagination';
+import Logger from '@/libs/logger';
 
 interface Student {
   student_id: number;
@@ -36,7 +37,7 @@ export function StudentsList() {
       setCurrentPage(response.currentPage);
     } catch (err) {
       setError('Không thể tải danh sách học sinh. Vui lòng thử lại sau.');
-      console.error('Error fetching students:', err);
+      Logger.error('Error fetching students:', err);
     } finally {
       setLoading(false);
     }

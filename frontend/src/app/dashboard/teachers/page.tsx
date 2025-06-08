@@ -10,6 +10,7 @@ import { notifications } from '@mantine/notifications';
 import { teacherApi, exportApi } from '@/api/apiService';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
+import Logger from '@/libs/logger';
 
 // Simple formatter for Vietnamese currency
 const formatVND = (value: string | number) => {
@@ -72,7 +73,7 @@ export default function TeachersPage() {
         // Refresh the teachers list after deletion
         fetchTeachers(currentPage, itemsPerPage);
       } catch (error) {
-        console.error('Error deleting teacher:', error);
+        Logger.error('Error deleting teacher:', error);
         notifications.show({
           title: 'Lỗi',
           message: 'Có lỗi xảy ra khi xóa giáo viên',
@@ -101,7 +102,7 @@ export default function TeachersPage() {
         color: 'green',
       });
     } catch (error) {
-      console.error('Error deleting selected teachers:', error);
+      Logger.error('Error deleting selected teachers:', error);
       notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi xảy ra khi xóa giáo viên. Vui lòng thử lại.',
@@ -165,7 +166,7 @@ export default function TeachersPage() {
         throw new Error(data.message || 'Có lỗi xảy ra');
       }
     } catch (error: any) {
-      console.error('Export bulk error:', error);
+      Logger.error('Export bulk error:', error);
       notifications.show({
         title: 'Lỗi',
         message: error.message || 'Có lỗi xảy ra khi xuất phiếu lương',

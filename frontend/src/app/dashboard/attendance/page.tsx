@@ -119,7 +119,7 @@ export default function TeacherAttendancePage() {
             newAttendanceData[teacher.id] = { full_days: [], half_days: [], absent_days: [], extra_days: [] };
           }
         } catch (error) {
-          console.error(`Failed to fetch attendance for teacher ${teacher.id}:`, error);
+          Logger.error(`Failed to fetch attendance for teacher ${teacher.id}:`, error);
            // Initialize with empty arrays on error
           newAttendanceData[teacher.id] = { full_days: [], half_days: [], absent_days: [], extra_days: [] };
         }
@@ -380,13 +380,13 @@ export default function TeacherAttendancePage() {
               await teacherApi.updateTeacher(teacher.id, updateData);
               return { success: true, teacherId: teacher.id, teacherName: teacher.name };
             } catch (updateError) {
-              console.error(`Failed to update teacher ${teacher.name} salary:`, updateError);
+              Logger.error(`Failed to update teacher ${teacher.name} salary:`, updateError);
               // Return failure for teacher update, but attendance save was successful
                return { success: false, teacherId: teacher.id, teacherName: teacher.name, error: updateError, step: 'updateTeacher' };
             }
 
           } catch (attendanceError) {
-            console.error(`Failed to save attendance data for teacher ${teacher.name}:`, attendanceError);
+            Logger.error(`Failed to save attendance data for teacher ${teacher.name}:`, attendanceError);
             // Return failure for attendance save
             return { success: false, teacherId: teacher.id, teacherName: teacher.name, error: attendanceError, step: 'saveAttendance' };
           }
@@ -412,7 +412,7 @@ export default function TeacherAttendancePage() {
       });
 
       if (errorCount > 0) {
-        console.error('Errors during save and update:', errorResults);
+        Logger.error('Errors during save and update:', errorResults);
          errorResults.forEach(err => {
            notifications.show({
              title: `Lỗi xử lý ${err.teacherName}`,
@@ -426,7 +426,7 @@ export default function TeacherAttendancePage() {
       await fetchTeachers(1, 1000);
 
     } catch (error) {
-      console.error('Unexpected error during save and update:', error);
+      Logger.error('Unexpected error during save and update:', error);
       notifications.show({
         title: 'Lỗi hệ thống',
         message: 'Đã xảy ra lỗi không mong muốn khi xử lý chấm công.',

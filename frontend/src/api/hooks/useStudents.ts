@@ -42,7 +42,6 @@ export const useStudents = () => {
         setTotalStudents(0);
       }
     } catch (error) {
-      console.error('Error fetching students:', error);
       setStudents([]);
       setTotalStudents(0);
       notifications.show({

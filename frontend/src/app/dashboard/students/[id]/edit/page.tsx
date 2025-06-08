@@ -95,7 +95,7 @@ export default function EditStudentPage() {
           meal_fee_per_ticket: Number(student.meal_fee) / Math.max(1, (Number(student.pm) - Number(student.pt))) || MEAL_FEE_PER_TICKET,
         });
       } catch (error) {
-        console.error('Failed to fetch student:', error);
+        Logger.error('Failed to fetch student:', error);
         notifications.show({
           title: 'Lỗi',
           message: 'Không thể tải thông tin học sinh. Vui lòng thử lại sau.',
@@ -173,7 +173,7 @@ export default function EditStudentPage() {
   const handleSubmit = async (values: StudentEditFormValues) => {
     try {
       if (!studentSequentialNumberRef.current) {
-        console.error('Sequential number not found, cannot update.');
+        Logger.error('Sequential number not found, cannot update.');
         notifications.show({
           title: 'Lỗi',
           message: 'Không tìm thấy mã học sinh duy nhất.',
@@ -222,7 +222,7 @@ export default function EditStudentPage() {
       });
       router.push('/dashboard/students');
     } catch (error: any) {
-      console.error('Error saving student:', error);
+      Logger.error('Error saving student:', error);
       
       // Check for authentication errors (401)
       if (error.response && error.response.status === 401) {

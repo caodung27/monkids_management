@@ -28,6 +28,7 @@ import { useCloudinary } from '@/hooks/useCloudinary';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { useParams, useRouter } from 'next/navigation';
+import Logger from '@/libs/logger';
 
 // Helper function to center the crop
 function centerAspectCrop(
@@ -224,14 +225,7 @@ export default function ProfilePage() {
 
       const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
       try {
-        console.log('Starting upload with file size:', file.size, 'bytes');
-        console.log('Environment variables check:', {
-          cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ? 'defined' : 'undefined',
-          uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ? 'defined' : 'undefined',
-        });
-        
         const result = await uploadMedia(file, 'image');
-        console.log('Upload succeeded:', result);
         
         setProfileData(prevProfileData => ({
           ...prevProfileData,
@@ -263,7 +257,7 @@ export default function ProfilePage() {
             color: 'green'
           });
         } catch (error) {
-          console.error('Lỗi cập nhật ảnh đại diện:', error);
+          Logger.error('Lỗi cập nhật ảnh đại diện:', error);
           notifications.show({
             title: 'Lỗi',
             message: (error as Error).message || 'Không thể cập nhật ảnh đại diện',
@@ -273,7 +267,7 @@ export default function ProfilePage() {
 
         setCropModalOpen(false);
       } catch (error: any) {
-        console.error('Upload error details:', {
+        Logger.error('Upload error details:', {
           message: error.message,
           response: error.response?.data,
           status: error.response?.status,
@@ -328,7 +322,7 @@ export default function ProfilePage() {
       // navigate to dashboard
       router.push('/dashboard');
     } catch (error) {
-      console.error('Lỗi cập nhật hồ sơ:', error);
+      Logger.error('Lỗi cập nhật hồ sơ:', error);
       notifications.show({
         title: 'Lỗi',
         message: (error as Error).message || 'Không thể cập nhật hồ sơ',

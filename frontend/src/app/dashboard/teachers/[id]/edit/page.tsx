@@ -8,6 +8,7 @@ import { teacherApi } from '@/api/apiService';
 import { Teacher, TeacherApiPayload } from '@/types';
 import { IconArrowLeft, IconDeviceFloppy } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import Logger from '@/libs/logger';
 
 interface RoleOption {
   value: string;
@@ -65,7 +66,7 @@ export default function EditTeacherPage() {
         initialSkillSessions.current = teacher.skill_sessions;
         initialEnglishSessions.current = teacher.english_sessions;
       } catch (error) {
-        console.error('Failed to fetch teacher:', error);
+        Logger.error('Failed to fetch teacher:', error);
       } finally {
         setLoading(false);
       }
@@ -216,7 +217,7 @@ export default function EditTeacherPage() {
       });
       router.push('/dashboard/teachers');
     } catch (error) {
-      console.error('Error saving teacher:', error);
+      Logger.error('Error saving teacher:', error);
       notifications.show({
         title: 'Lỗi',
         message: 'Có lỗi khi lưu thông tin giáo viên. Vui lòng thử lại sau.',
