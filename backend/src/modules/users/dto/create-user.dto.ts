@@ -40,18 +40,7 @@ export class CreateUserDto {
 
   @ApiProperty({ default: 'LOCAL' })
   @IsString()
-  @IsOptional()
-  account_type?: string;
-
-  @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
-  googleId?: string;
-
-  @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
-  provider?: string;
+  account_type: string;
 
   @ApiProperty({ default: true })
   @IsBoolean()

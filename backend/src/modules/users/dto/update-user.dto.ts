@@ -25,7 +25,7 @@ export class UpdateUserDto {
   @IsString()
   address?: string;
 
-  @ApiProperty({ required: false, description: 'URL to user profile image' })
+  @ApiProperty()
   @IsString()
   @IsOptional()
   image?: string;
@@ -48,9 +48,4 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   password?: string;
-
-  @ApiProperty()
-  @IsString()
-  @IsOptional()
-  googleId?: string;
 }
