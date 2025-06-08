@@ -1,21 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { checkTokenAndRefreshIfNeeded, TokenService, authApi } from '@/api/apiService';
+import { authApi, TokenService } from '@/api/apiService';
 import { Loader, Center, Text, Button } from '@mantine/core';
 
 interface AuthCheckProps {
   children: React.ReactNode;
 }
 
-// Expanded list of public paths that don't require authentication
+// List of public paths that don't require authentication
 const publicPaths = [
   '/auth/login', 
-  '/auth/register',
-  '/auth/callback', 
-  '/auth/oauth-callback', 
-  '/auth/error'
+  '/auth/register'
 ];
 
 export default function AuthCheck({ children }: AuthCheckProps) {

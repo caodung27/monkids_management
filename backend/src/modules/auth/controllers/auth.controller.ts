@@ -6,10 +6,9 @@ import {
   Get,
   Req,
   Logger,
-  Patch,
   UnauthorizedException,
+  Patch,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '../services/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
@@ -24,12 +23,7 @@ import { Request } from 'express';
 import { User } from '../../users/entities/user.entity';
 
 interface RequestWithUser extends Request {
-  user: User & {
-    firstName: string;
-    lastName: string;
-    picture: string;
-    accessToken: string;
-  };
+  user: User;
 }
 
 @ApiTags('auth')
@@ -67,22 +61,6 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getProfile(@Req() req: RequestWithUser) {
     return req.user;
-  }
-
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth login' })
-  @ApiResponse({ status: 200, description: 'Google OAuth login successful' })
-  googleAuth() {
-    // This route initiates the Google OAuth flow
-  }
-
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth callback' })
-  @ApiResponse({ status: 200, description: 'Google OAuth callback successful' })
-  googleAuthCallback(@Req() req: RequestWithUser) {
-    return this.authService.validateGoogleUser(req.user);
   }
 
   @Patch('update-password')

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { User, UserRole } from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { UsersService } from 'src/modules/users/services/users.service';
 import { RegisterDto } from '../dto/register.dto';
 
@@ -15,14 +15,6 @@ interface JwtPayload {
   sub: string;
   email: string;
   role: string;
-}
-
-interface GoogleProfile {
-  email: string;
-  firstName: string;
-  lastName: string;
-  picture: string;
-  accessToken: string;
 }
 
 @Injectable()
@@ -50,7 +42,6 @@ export class AuthService {
     this.logger.debug(
       `Password hashed successfully for user: ${registerDto.email}`,
     );
-    this.logger.debug(`Hashed password: ${hashedPassword}`);
 
     const user = await this.usersService.create({
       ...registerDto,
@@ -70,22 +61,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Nếu user đăng nhập bằng Google, cho phép đăng nhập
-    if (user.account_type === 'GOOGLE') {
-      this.logger.debug(`User ${email} is a Google account, allowing login`);
-      return user;
-    }
-
-    // Nếu user không có password, không cho phép đăng nhập
     if (!user.password) {
       this.logger.error(`User has no password set: ${email}`);
-      throw new UnauthorizedException(
-        'Please login with Google or reset your password',
-      );
+      throw new UnauthorizedException('Please set your password');
     }
 
     try {
-      // Thử validate password
       const isPasswordValid = await bcrypt.compare(
         inputPassword,
         user.password,
@@ -116,61 +97,12 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
-        account_type: user.account_type,
       },
     };
   }
 
-  async validateGoogleUser(profile: GoogleProfile) {
-    let user = await this.usersService.findByEmail(profile.email);
-    if (!user) {
-      user = await this.usersService.create({
-        email: profile.email,
-        name: `${profile.firstName} ${profile.lastName}`,
-        password: '',
-        role: UserRole.USER,
-        account_type: 'GOOGLE',
-        is_active: true,
-      });
-    } else if (user.account_type !== 'GOOGLE') {
-      user = await this.usersService.update(user.id, {
-        account_type: 'GOOGLE',
-        is_active: true,
-      });
-    }
-    return this.login(user);
-  }
-
-  async updatePassword(
-    userId: string,
-    oldPassword: string,
-    newPassword: string,
-  ): Promise<User> {
-    const user = await this.usersService.findOne(userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (!user.password) {
-      throw new UnauthorizedException('No password set for this user');
-    }
-
-    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid password');
-    }
-
-    const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    return this.usersService.update(userId, {
-      password: hashedPassword,
-    });
-  }
-
   async introspectToken(user: User) {
     try {
-      // Check if user still exists and is active
       const currentUser = await this.usersService.findOne(user.id);
       if (!currentUser || !currentUser.is_active) {
         return { active: false };
@@ -192,7 +124,6 @@ export class AuthService {
 
   async verifyToken(user: User) {
     try {
-      // Check if user still exists and is active
       const currentUser = await this.usersService.findOne(user.id);
       if (!currentUser || !currentUser.is_active) {
         throw new UnauthorizedException('User not found or inactive');
@@ -214,18 +145,15 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     try {
-      // Verify the refresh token
       const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
       });
 
-      // Get the user
       const user = await this.usersService.findOne(payload.sub);
       if (!user || !user.is_active) {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      // Generate new access token
       const newAccessToken = this.jwtService.sign(
         { email: user.email, sub: user.id, role: user.role },
         { expiresIn: '1h' }
@@ -265,5 +193,28 @@ export class AuthService {
       this.logger.error(`Error during logout: ${errorMessage}`);
       throw error;
     }
+  }
+
+  async updatePassword(userId: string, oldPassword: string, newPassword: string): Promise<User> {
+    const user = await this.usersService.findOne(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.password) {
+      throw new UnauthorizedException('No password set for this user');
+    }
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    return this.usersService.update(userId, {
+      password: hashedPassword,
+    });
   }
 }

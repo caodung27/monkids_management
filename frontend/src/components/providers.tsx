@@ -10,7 +10,7 @@ interface ProvidersProps {
   children: ReactNode;
 }
 
-export function Providers({ children }: ProvidersProps) {
+export default function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

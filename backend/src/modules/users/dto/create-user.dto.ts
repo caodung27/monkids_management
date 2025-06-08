@@ -10,7 +10,8 @@ export class CreateUserDto {
   @ApiProperty()
   @IsString()
   @MinLength(6)
-  password: string;
+  @IsOptional()
+  password?: string;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -27,6 +28,11 @@ export class CreateUserDto {
   @IsOptional()
   address?: string;
 
+  @ApiProperty({ required: false, description: 'URL to user profile image' })
+  @IsString()
+  @IsOptional()
+  image?: string;
+
   @ApiProperty({ enum: UserRole, default: UserRole.USER })
   @IsEnum(UserRole)
   @IsOptional()
@@ -34,7 +40,18 @@ export class CreateUserDto {
 
   @ApiProperty({ default: 'LOCAL' })
   @IsString()
-  account_type: string;
+  @IsOptional()
+  account_type?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  googleId?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  provider?: string;
 
   @ApiProperty({ default: true })
   @IsBoolean()

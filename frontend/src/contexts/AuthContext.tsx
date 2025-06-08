@@ -133,15 +133,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await authApi.login({ email, password });
       
       if (response.access_token) {
+        // Save tokens
+        TokenService.setAccessToken(response.access_token);
+        if (response.refresh_token) {
+          TokenService.setRefreshToken(response.refresh_token);
+        }
+        
+        // Update user info
         await updateUserInfo();
         
+        // Show success notification
         notifications.show({
           title: 'Thành công',
           message: 'Đăng nhập thành công',
           color: 'green',
         });
         
-        router.push('/dashboard');
+        // Force navigation to dashboard using window.location
+        window.location.href = '/dashboard';
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -150,6 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         message: error.message || 'Đăng nhập thất bại',
         color: 'red',
       });
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -224,7 +234,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log('AuthProvider: Initializing auth state');
         // Skip auth check if on public paths
         const pathname = window.location.pathname;
-        const isPublicPath = ['/auth/login', '/auth/register', '/auth/callback', '/auth/oauth-callback', '/auth/error']
+        const isPublicPath = ['/auth/login', '/auth/register']
           .some(path => pathname.startsWith(path));
         
         if (!isPublicPath) {
@@ -241,7 +251,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('AuthProvider: Periodic token validation');
       // Skip validation if on public paths
       const pathname = window.location.pathname;
-      const isPublicPath = ['/auth/login', '/auth/register', '/auth/callback', '/auth/oauth-callback', '/auth/error']
+      const isPublicPath = ['/auth/login', '/auth/register']
         .some(path => pathname.startsWith(path));
       
       if (!isPublicPath) {

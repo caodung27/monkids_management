@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude } from 'class-transformer';
 
@@ -21,10 +21,6 @@ export class User {
   @ApiProperty()
   @Column({ unique: true })
   email: string;
-
-  @Exclude()
-  @Column({ nullable: true })
-  password?: string;
 
   @ApiProperty()
   @Column({ length: 20, nullable: true })
@@ -62,9 +58,14 @@ export class User {
   @Column({ nullable: true })
   code_expired: Date;
 
-  @CreateDateColumn()
+  @ApiProperty()
+  @Exclude()
+  @Column({ length: 255, nullable: false })
+  password: string;
+
+  @CreateDateColumn({ type: 'timestamp', nullable: false, default: () => 'now()' })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamp', nullable: false, default: () => 'now()' })
   updated_at: Date;
 } 

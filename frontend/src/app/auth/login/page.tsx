@@ -9,7 +9,6 @@ import {
   Title, 
   Text, 
   Anchor, 
-  Divider,
   Paper,
   Container,
   Loader,
@@ -17,7 +16,6 @@ import {
 } from '@mantine/core';
 import { useForm, zodResolver } from '@mantine/form';
 import { z } from 'zod';
-import { IconBrandGoogle } from '@tabler/icons-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi, TokenService } from '@/api/apiService';
 import { notifications } from '@mantine/notifications';
@@ -81,73 +79,11 @@ export default function LoginPage() {
   const handleSubmit = async (values: { email: string; password: string }) => {
     try {
       setIsSubmitting(true);
-      console.log('Login: Attempting login with email:', values.email);
-      
-      const response = await authApi.login({
-        email: values.email,
-        password: values.password
-      });
-      
-      console.log('Login: Login response:', response);
-      
-      if (response && response.access_token) {
-        console.log('Login: Login successful, saving tokens');
-        
-        // Save tokens
-        TokenService.setAccessToken(response.access_token);
-        
-        // Set auth flags
-        localStorage.setItem('auth_successful', 'true');
-        sessionStorage.setItem('auth_successful', 'true');
-        
-        // Show success notification
-        notifications.show({
-          title: 'Thành công',
-          message: 'Đăng nhập thành công',
-          color: 'green',
-        });
-        
-        // Force a small delay to ensure tokens are saved
-        setTimeout(() => {
-          console.log('Login: Executing redirect');
-          // Use the redirectTo path from response, fallback to dashboard
-          window.location.href = response.redirectTo || '/dashboard';
-        }, 500);
-      } else {
-        throw new Error('Không nhận được token từ server');
-      }
-    } catch (error: any) {
+      await login(values.email, values.password);
+    } catch (error) {
       console.error('Login error:', error);
-      notifications.show({
-        title: 'Lỗi',
-        message: error.message || 'Đăng nhập thất bại',
-        color: 'red',
-      });
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleLoginClick = () => {
-    try {
-      // Clear any existing tokens before initiating a new OAuth flow
-      TokenService.clearTokens();
-      
-      // Set a flag indicating we're starting OAuth
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('oauth_initiated', Date.now().toString());
-      }
-      
-      // Use the proxy path for OAuth
-      const authUrl = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || '/auth/google/callback';
-      
-      console.log('Login: Initiating Google OAuth login', { authUrl });
-      
-      // Redirect to the OAuth provider
-      window.location.href = authUrl;
-    } catch (error) {
-      console.error('Login: Error initiating Google OAuth', error);
-      // Handle error (could display a notification here)
     }
   };
 
@@ -194,19 +130,6 @@ export default function LoginPage() {
             Đăng nhập
           </Button>
         </form>
-
-        <Divider label="Hoặc tiếp tục với" labelPosition="center" my="lg" />
-
-        {/* Google login button - now navigates to backend */}
-        {/* <Button
-          fullWidth
-          variant="outline"
-          leftSection={<IconBrandGoogle />}
-          onClick={handleGoogleLoginClick}
-          mb="md"
-        >
-          Đăng nhập với Google
-        </Button> */}
 
         <Text ta="center" mt="md">
           Chưa có tài khoản?{' '}

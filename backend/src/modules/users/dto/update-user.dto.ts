@@ -25,8 +25,9 @@ export class UpdateUserDto {
   @IsString()
   address?: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false, description: 'URL to user profile image' })
   @IsString()
+  @IsOptional()
   image?: string;
 
   @ApiProperty({ enum: UserRole })
@@ -47,4 +48,9 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   password?: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  googleId?: string;
 }

@@ -13,7 +13,7 @@ import {
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavItem {
   icon: any;
@@ -65,10 +65,6 @@ export default function Sidebar() {
     if (!user?.role) return false; // If no user role, don't show restricted items
     return item.roles.includes(user.role);
   });
-
-  // Debug log
-  console.log('Sidebar: User role:', user?.role);
-  console.log('Sidebar: Filtered nav items:', navItems);
 
   return (
     <Stack gap="xs">

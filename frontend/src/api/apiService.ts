@@ -9,26 +9,40 @@ import { QueryClient } from '@tanstack/react-query';
 // Token service for managing JWT tokens
 export const TokenService = {
   getAccessToken: () => {
-    return localStorage.getItem('access_token');
+    return localStorage.getItem('access_token') || Cookies.get('accessToken');
   },
   setAccessToken: (token: string) => {
     localStorage.setItem('access_token', token);
+    Cookies.set('accessToken', token, { path: '/' });
   },
   getRefreshToken: () => {
-    return localStorage.getItem('refresh_token');
+    return localStorage.getItem('refresh_token') || Cookies.get('refreshToken');
   },
   setRefreshToken: (token: string) => {
     localStorage.setItem('refresh_token', token);
+    Cookies.set('refreshToken', token, { path: '/' });
   },
   clearTokens: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    Cookies.remove('accessToken', { path: '/' });
+    Cookies.remove('refreshToken', { path: '/' });
   },
   checkTokensExist: () => {
-    return !!(localStorage.getItem('access_token') || localStorage.getItem('refresh_token'));
+    return !!(
+      localStorage.getItem('access_token') || 
+      localStorage.getItem('refresh_token') ||
+      Cookies.get('accessToken') ||
+      Cookies.get('refreshToken')
+    );
   },
   hasAnyToken: () => {
-    return !!(localStorage.getItem('access_token') || localStorage.getItem('refresh_token'));
+    return !!(
+      localStorage.getItem('access_token') || 
+      localStorage.getItem('refresh_token') ||
+      Cookies.get('accessToken') ||
+      Cookies.get('refreshToken')
+    );
   },
   forceAuthSuccess: () => {
     localStorage.setItem('auth_successful', 'true');
@@ -36,8 +50,8 @@ export const TokenService = {
   }
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monkids.site';
-// const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.monkids.site';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 // Create axios instance with default config
 export const axiosInstance = axios.create({
@@ -216,19 +230,6 @@ export const authApi = {
       newPassword
     });
     return response.data;
-  },
-
-  googleLogin: async () => {
-    // window.location.href = `${process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI}`;
-    // only for development
-    window.location.href = '/auth/google/callback';
-  },
-
-  googleCallback: async (code: string) => {
-    const response = await axiosInstance.get(`/auth/google/callback?code=${code}`);
-    const { access_token, user } = response.data;
-    TokenService.setAccessToken(access_token);
-    return { access_token, user };
   },
 
   getUserPermissions: async () => {
