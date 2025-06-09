@@ -4,12 +4,16 @@ import {
   ConflictException,
   Logger,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from '../../users/entities/user.entity';
 import { UsersService } from 'src/modules/users/services/users.service';
 import { RegisterDto } from '../dto/register.dto';
+import { ContextIdFactory } from '@nestjs/core';
+import { REQUEST } from '@nestjs/core';
+import { Request } from 'express';
 
 interface JwtPayload {
   sub: string;
@@ -25,6 +29,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    @Inject(REQUEST) private readonly request: Request,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<User> {
@@ -105,7 +110,22 @@ export class AuthService {
     try {
       const currentUser = await this.usersService.findOne(user.id);
       if (!currentUser || !currentUser.is_active) {
-        return { active: false };
+        return { active: false, reason: 'User not found or inactive' };
+      }
+
+      // Get the token from the request
+      const token = this.jwtService.decode(
+        this.getTokenFromRequest()
+      ) as { exp: number };
+
+      if (!token) {
+        return { active: false, reason: 'Invalid token format' };
+      }
+
+      // Check if token is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (token.exp && token.exp < now) {
+        return { active: false, reason: 'Token expired' };
       }
 
       return {
@@ -118,8 +138,24 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error(`Token introspection failed: ${error.message}`);
-      return { active: false };
+      return { active: false, reason: error.message };
     }
+  }
+
+  private getTokenFromRequest(): string {
+    const req = this.getCurrentRequest();
+    if (!req || !req.headers.authorization) {
+      throw new Error('No authorization header found');
+    }
+    return req.headers.authorization.replace('Bearer ', '');
+  }
+
+  private getCurrentRequest() {
+    const contextId = ContextIdFactory.getByRequest(this.request);
+    if (!contextId) {
+      throw new Error('No request context found');
+    }
+    return this.request;
   }
 
   async verifyToken(user: User) {

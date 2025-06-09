@@ -243,20 +243,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
 
     // Set up periodic token validation with longer interval
-    tokenValidationInterval.current = setInterval(() => {
+    tokenValidationInterval.current = setInterval(async () => {
       // Skip validation if on public paths
       const pathname = window.location.pathname;
       const isPublicPath = ['/auth/login', '/auth/register']
         .some(path => pathname.startsWith(path));
       
       if (!isPublicPath) {
-        // Only check token validity, don't fetch user data unless necessary
-        const accessToken = TokenService.getAccessToken();
-        if (!accessToken) {
-          checkAndRefreshAuth();
+        try {
+          // Check token validity using introspection
+          const introspectResult = await authApi.introspectToken();
+          
+          if (!introspectResult.active) {
+            // Token is not valid, try to refresh
+            const refreshToken = TokenService.getRefreshToken();
+            if (refreshToken) {
+              try {
+                await authApi.refreshToken(refreshToken);
+                // Update user info after successful refresh
+                await updateUserInfo();
+              } catch (refreshError) {
+                // If refresh fails, redirect to login
+                TokenService.clearTokens();
+                window.location.href = '/auth/login';
+              }
+            } else {
+              // No refresh token available, redirect to login
+              TokenService.clearTokens();
+              window.location.href = '/auth/login';
+            }
+          }
+        } catch (error) {
+          // Handle any errors during the process
+          Logger.error('Token validation failed:', error);
+          TokenService.clearTokens();
+          window.location.href = '/auth/login';
         }
       }
-    }, 15 * 60 * 1000); // Check every 15 minutes instead of 5
+    }, 60 * 1000); // Check every minute
 
     return () => {
       if (tokenValidationInterval.current) {
