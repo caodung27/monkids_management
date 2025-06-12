@@ -70,15 +70,14 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME
           script: |
             cd ~/monkids_management/backend
             
             # Stop and remove existing containers
-            docker-compose down
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose down
             
             # Remove all containers
-            docker-compose rm -f
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose rm -f
             
             # Clean up unused resources
             docker system prune -f
@@ -87,10 +86,10 @@ jobs:
             docker system prune -af --volumes
             
             # Pull latest images
-            docker-compose pull
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose pull
             
             # Start services with environment variables
-            docker-compose up -d
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose up -d
             
             # Wait for initial startup
             echo "Waiting for services to start..."
@@ -104,9 +103,9 @@ jobs:
               echo "Verification attempt $ATTEMPT of $MAX_ATTEMPTS"
               
               # Check if containers are running
-              if ! docker-compose ps | grep -q "Up"; then
+              if ! DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose ps | grep -q "Up"; then
                 echo "Containers are not running"
-                docker-compose logs
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
                 [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
                 ATTEMPT=$((ATTEMPT + 1))
                 sleep 10
@@ -114,9 +113,9 @@ jobs:
               fi
               
               # Check container health
-              if ! docker-compose ps | grep -q "healthy"; then
+              if ! DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose ps | grep -q "healthy"; then
                 echo "Containers are not healthy"
-                docker-compose logs
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
                 [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
                 ATTEMPT=$((ATTEMPT + 1))
                 sleep 10
@@ -126,7 +125,7 @@ jobs:
               # Check API health
               if ! wget -q --spider --timeout=5 --no-check-certificate https://api.monkids.site/api/health; then
                 echo "API health check failed"
-                docker-compose logs
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
                 [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
                 ATTEMPT=$((ATTEMPT + 1))
                 sleep 10
@@ -138,7 +137,7 @@ jobs:
             done
             
             echo "Deployment verification failed after $MAX_ATTEMPTS attempts"
-            docker-compose logs
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
             exit 1
 
       - name: Notify on failure
