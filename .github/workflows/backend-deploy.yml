@@ -73,6 +73,9 @@ jobs:
           script: |
             cd ~/monkids_management/backend
             
+            # Force remove existing containers
+            docker rm -f monkids_backend nginx || true
+            
             # Stop and remove existing containers
             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose down
             
