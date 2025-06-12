@@ -71,13 +71,22 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/monkid_management
+            cd ~/monkid_management/backend
+            
+            # Stop and remove existing containers
+            docker-compose down
+            
+            # Remove all containers
+            docker-compose rm -f
+            
+            # Clean up unused resources
+            docker system prune -f
+            
+            # Clean up all resources and volumes
+            docker system prune -af --volumes
             
             # Pull latest images
             docker-compose pull
-            
-            # Stop and remove existing containers
-            docker-compose down --remove-orphans
             
             # Start services with environment variables
             docker-compose up -d
