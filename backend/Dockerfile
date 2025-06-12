@@ -7,19 +7,24 @@ RUN apt-get update \
     && apt-get install -y build-essential python3 \
     && npm install -g npm@8.19.4 \
     && npm install -g @nestjs/cli@9.5.0 \
-    && npm cache clean --force
+    && npm cache clean --force \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies with legacy peer deps
 RUN npm install --legacy-peer-deps --no-optional \
-    && npm cache clean --force
+    && npm cache clean --force \
+    && rm -rf /root/.npm
 
 # Copy source and build
 COPY . .
 RUN npm run build \
-    && npm prune --production --legacy-peer-deps
+    && npm prune --production --legacy-peer-deps \
+    && rm -rf /root/.npm \
+    && rm -rf /root/.cache
 
 # Production stage
 FROM ubuntu:20.04
@@ -32,7 +37,9 @@ RUN apt-get update \
     && apt-get install -y curl gnupg \
     && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g npm@8.19.4
+    && npm install -g npm@8.19.4 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 WORKDIR /app
 
@@ -67,6 +74,8 @@ RUN apt-get update \
         libglu1-mesa \
         libasound2 \
     && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/* \
     && mkdir -p /tmp/.local/share/applications \
     && touch /tmp/.local/share/applications/mimeapps.list \
     && mkdir -p /tmp/.cache/fontconfig \
@@ -107,21 +116,27 @@ ENV FONTCONFIG_PATH=/etc/fonts \
     PUPPETEER_CACHE_DIR=/tmp/.cache/puppeteer \
     NODE_OPTIONS="--max-old-space-size=512"
 
-# Set final permissions
+# Set final permissions and cleanup
 RUN chown -R root:root /app \
-    && chmod -R 755 /app
+    && chmod -R 755 /app \
+    && rm -rf /root/.npm \
+    && rm -rf /root/.cache \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
 
 # Expose port
 EXPOSE 8000
 
-# Create startup script
+# Create startup script with cleanup
 RUN echo '#!/bin/bash\n\
 Xvfb :99 -screen 0 1024x768x16 &\n\
 XVFB_PID=$!\n\
 sleep 2\n\
 google-chrome --version\n\
 npm run start:prod\n\
-kill $XVFB_PID' > /app/start.sh \
+kill $XVFB_PID\n\
+rm -rf /tmp/*\n\
+rm -rf /var/tmp/*' > /app/start.sh \
     && chmod +x /app/start.sh
 
 # Start application with Xvfb
