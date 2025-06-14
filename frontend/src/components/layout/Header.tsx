@@ -20,7 +20,8 @@ import {
   IconChevronDown,
   IconUserCircle,
   IconSun,
-  IconMoon
+  IconMoon,
+  IconLock
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -97,6 +98,14 @@ export default function Header({ opened, toggle }: HeaderProps) {
                   href={`/profile/${profileId}`}
                 >
                   Hồ sơ cá nhân
+                </Menu.Item>
+
+                <Menu.Item
+                  leftSection={<IconLock style={{ width: rem(14), height: rem(14) }} />}
+                  component={Link}
+                  href="/auth/reset-password"
+                >
+                  Đổi mật khẩu
                 </Menu.Item>
                 
                 <Menu.Item leftSection={<IconSun style={{ width: rem(14), height: rem(14) }} />}>

@@ -258,7 +258,12 @@ export const authApi = {
     } catch (error) {
       throw error;
     }
-  }
+  },
+
+  changePassword: async (newPassword: string) => {
+    const response = await axiosInstance.post('/auth/change-password', { newPassword });
+    return response.data;
+  },
 };
 
 // Profile API
