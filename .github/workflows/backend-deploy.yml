@@ -126,22 +126,49 @@ jobs:
               fi
               
               # Check API health with improved error handling
-              HEALTH_CHECK_RESPONSE=$(curl -s -w "\n%{http_code}" https://api.monkids.site/api/health)
-              HTTP_CODE=$(echo "$HEALTH_CHECK_RESPONSE" | tail -n1)
-              RESPONSE_BODY=$(echo "$HEALTH_CHECK_RESPONSE" | sed '$d')
+              echo "Checking HTTP health..."
+              HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" http://api.monkids.site/api/health)
+              HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
+              HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
               
-              if [ "$HTTP_CODE" != "200" ]; then
-                echo "API health check failed with status $HTTP_CODE"
-                echo "Response body: $RESPONSE_BODY"
-                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
-                [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
-                ATTEMPT=$((ATTEMPT + 1))
-                sleep 10
-                continue
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "HTTP health check successful"
+                exit 0
               fi
               
-              echo "Deployment verified successfully"
-              exit 0
+              echo "HTTP health check failed with status $HTTP_CODE"
+              echo "HTTP response body: $HTTP_BODY"
+              
+              echo "Checking HTTPS health..."
+              HTTPS_RESPONSE=$(curl -s -w "\n%{http_code}" -k https://api.monkids.site/api/health)
+              HTTPS_CODE=$(echo "$HTTPS_RESPONSE" | tail -n1)
+              HTTPS_BODY=$(echo "$HTTPS_RESPONSE" | sed '$d')
+              
+              if [ "$HTTPS_CODE" = "200" ]; then
+                echo "HTTPS health check successful"
+                exit 0
+              fi
+              
+              echo "HTTPS health check failed with status $HTTPS_CODE"
+              echo "HTTPS response body: $HTTPS_BODY"
+              
+              echo "Checking direct backend health..."
+              BACKEND_RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8000/api/health)
+              BACKEND_CODE=$(echo "$BACKEND_RESPONSE" | tail -n1)
+              BACKEND_BODY=$(echo "$BACKEND_RESPONSE" | sed '$d')
+              
+              if [ "$BACKEND_CODE" = "200" ]; then
+                echo "Direct backend health check successful"
+                exit 0
+              fi
+              
+              echo "Direct backend health check failed with status $BACKEND_CODE"
+              echo "Direct backend response body: $BACKEND_BODY"
+              
+              DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
+              [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
+              ATTEMPT=$((ATTEMPT + 1))
+              sleep 10
             done
             
             echo "Deployment verification failed after $MAX_ATTEMPTS attempts"
