@@ -125,8 +125,8 @@ jobs:
                 continue
               fi
               
-              # Check API health
-              if ! wget -q --spider --timeout=5 --no-check-certificate https://api.monkids.site/api/health; then
+              # Check API health with curl instead of wget
+              if ! curl -f -s -o /dev/null -w "%{http_code}" https://api.monkids.site/api/health | grep -q "200"; then
                 echo "API health check failed"
                 DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
                 [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
