@@ -23,8 +23,7 @@ interface ExportProgress {
 
 @Injectable()
 export class ExportService {
-  private readonly BATCH_SIZE = 5;
-  private readonly MAX_CONCURRENT = 3;
+  private readonly CHUNK_SIZE = 5;
   private browser: puppeteer.Browser;
 
   constructor(
@@ -37,107 +36,39 @@ export class ExportService {
   }
 
   private async initBrowser() {
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    const options: any = {
+    this.browser = await puppeteer.launch({
       headless: 'new',
-      timeout: 30000,
-    };
-
-    if (isProduction) {
-      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome';
-      options.args = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--no-zygote',
-        '--no-first-run',
-        '--window-size=1920,1080',
-        '--font-render-hinting=none',
-        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,PowerBookmarksSidePanel,UsbDeviceMonitor,GlobalMediaControls',
-        '--disable-dev-tools',
-        '--disable-notifications',
-        '--disable-background-networking',
-        '--disable-default-apps',
-        '--disable-sync',
-        '--disable-translate',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-client-side-phishing-detection',
-        '--disable-component-extensions-with-background-pages',
-        '--disable-breakpad',
-        '--disable-ipc-flooding-protection',
-        '--disable-renderer-backgrounding',
-        '--disable-component-update',
-        '--disable-domain-reliability',
-        '--disable-print-preview',
-        '--disable-setuid-sandbox',
-        '--disable-speech-api',
-        '--disable-voice-input',
-        '--no-experiments',
-        '--no-pings',
-        '--no-proxy-server',
-        '--force-color-profile=srgb',
-        '--disable-audio-output',
-        '--disable-webgl',
-        '--disable-threaded-scrolling',
-        '--disable-accelerated-2d-canvas',
-        '--disable-accelerated-video-decode',
-        '--disable-gpu-compositing',
-        '--disable-logging',
-      ];
-    }
-
-    this.browser = await puppeteer.launch(options);
-  }
-
-  async onModuleDestroy() {
-    if (this.browser) {
-      await this.browser.close();
-    }
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
   }
 
   private async generateImage(html: string): Promise<Buffer> {
-    if (!this.browser || !this.browser.isConnected()) {
-      console.log('Browser not connected, reinitializing...');
-      await this.initBrowser();
-    }
-
     const page = await this.browser.newPage();
-    try {
-      await page.setViewport({
-        width: 850,
-        height: 1100,
-        deviceScaleFactor: 2,
-      });
-
-      await page.setContent(html, {
-        waitUntil: ['domcontentloaded', 'networkidle0'],
-        timeout: 30000
-      });
-
-      const element = await page.$('#receipt-root');
-      if (!element) {
-        throw new Error('Receipt root element not found');
-      }
-
-      const imageBuffer = await element.screenshot({
-        type: 'png',
-        omitBackground: true,
-        encoding: 'binary'
-      });
-
-      return Buffer.from(imageBuffer);
-    } finally {
-      await page.close().catch(err => console.error('Error closing page:', err));
-    }
+    await page.setContent(html);
+    const screenshot = await page.screenshot({
+      fullPage: true,
+      type: 'png',
+    });
+    await page.close();
+    return screenshot;
   }
 
   private sanitizeFileName(fileName: string): string {
     return fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  }
+
+  private async processChunk<T>(
+    items: T[],
+    processItem: (item: T) => Promise<void>,
+    progressEmitter: EventEmitter,
+    processedItems: number,
+    totalItems: number
+  ): Promise<void> {
+    await Promise.all(items.map(async (item) => {
+      await processItem(item);
+      processedItems++;
+      progressEmitter.emit('progress', { processed: processedItems, total: totalItems });
+    }));
   }
 
   async bulkExport(type: 'student' | 'teacher', ids: string[]): Promise<{ stream: PassThrough; total: number }> {
@@ -173,19 +104,22 @@ export class ExportService {
 
           totalItems = students.length;
 
-          // Process students in batches
-          for (let i = 0; i < students.length; i += this.BATCH_SIZE) {
-            const batch = students.slice(i, i + this.BATCH_SIZE);
-            await Promise.all(batch.map(async (student) => {
-              const html = renderStudentReceiptHTML(student, parseInt(currentMonth), parseInt(currentYear));
-              const imageBuffer = await this.generateImage(html);
-              const classroom = student.classroom || 'Other';
-              const fileName = `${this.sanitizeFileName(student.name || 'Unknown')}_${student.student_id}.png`;
-              
-              archive.append(imageBuffer, { name: `${classroom}/${fileName}` });
-              processedItems++;
-              progressEmitter.emit('progress', { processed: processedItems, total: totalItems });
-            }));
+          // Process students in chunks
+          for (let i = 0; i < students.length; i += this.CHUNK_SIZE) {
+            const chunk = students.slice(i, i + this.CHUNK_SIZE);
+            await this.processChunk(
+              chunk,
+              async (student) => {
+                const html = renderStudentReceiptHTML(student, parseInt(currentMonth), parseInt(currentYear));
+                const imageBuffer = await this.generateImage(html);
+                const classroom = student.classroom || 'Other';
+                const fileName = `${this.sanitizeFileName(student.name || 'Unknown')}_${student.student_id}.png`;
+                archive.append(imageBuffer, { name: `${classroom}/${fileName}` });
+              },
+              progressEmitter,
+              processedItems,
+              totalItems
+            );
           }
         } else {
           const teachers = await this.teacherRepository.find({
@@ -197,18 +131,21 @@ export class ExportService {
 
           totalItems = teachers.length;
 
-          // Process teachers in batches
-          for (let i = 0; i < teachers.length; i += this.BATCH_SIZE) {
-            const batch = teachers.slice(i, i + this.BATCH_SIZE);
-            await Promise.all(batch.map(async (teacher) => {
-              const html = renderTeacherSalaryHTML(teacher, parseInt(currentMonth), parseInt(currentYear));
-              const imageBuffer = await this.generateImage(html);
-              const fileName = `${this.sanitizeFileName(teacher.name || 'Unknown')}_${teacher.teacher_no}.png`;
-              
-              archive.append(imageBuffer, { name: `GV_Thang${currentMonth}/${fileName}` });
-              processedItems++;
-              progressEmitter.emit('progress', { processed: processedItems, total: totalItems });
-            }));
+          // Process teachers in chunks
+          for (let i = 0; i < teachers.length; i += this.CHUNK_SIZE) {
+            const chunk = teachers.slice(i, i + this.CHUNK_SIZE);
+            await this.processChunk(
+              chunk,
+              async (teacher) => {
+                const html = renderTeacherSalaryHTML(teacher, parseInt(currentMonth), parseInt(currentYear));
+                const imageBuffer = await this.generateImage(html);
+                const fileName = `${this.sanitizeFileName(teacher.name || 'Unknown')}_${teacher.teacher_no}.png`;
+                archive.append(imageBuffer, { name: `GV_Thang${currentMonth}/${fileName}` });
+              },
+              progressEmitter,
+              processedItems,
+              totalItems
+            );
           }
         }
 
