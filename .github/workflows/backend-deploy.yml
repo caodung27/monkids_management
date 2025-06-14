@@ -125,9 +125,14 @@ jobs:
                 continue
               fi
               
-              # Check API health with curl instead of wget
-              if ! curl -f -s -o /dev/null -w "%{http_code}" https://api.monkids.site/api/health | grep -q "200"; then
-                echo "API health check failed"
+              # Check API health with improved error handling
+              HEALTH_CHECK_RESPONSE=$(curl -s -w "\n%{http_code}" https://api.monkids.site/api/health)
+              HTTP_CODE=$(echo "$HEALTH_CHECK_RESPONSE" | tail -n1)
+              RESPONSE_BODY=$(echo "$HEALTH_CHECK_RESPONSE" | sed '$d')
+              
+              if [ "$HTTP_CODE" != "200" ]; then
+                echo "API health check failed with status $HTTP_CODE"
+                echo "Response body: $RESPONSE_BODY"
                 DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} docker-compose logs
                 [ $ATTEMPT -eq $MAX_ATTEMPTS ] && exit 1
                 ATTEMPT=$((ATTEMPT + 1))
