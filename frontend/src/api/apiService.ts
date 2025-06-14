@@ -493,8 +493,9 @@ export const exportApi = {
   },
 
   // Add new method to track export progress
-  getExportProgress: () => {
-    return new EventSource('/api/export/progress');
+  getExportProgress: (type: 'student' | 'teacher', ids: string[]) => {
+    const idsParam = ids.join(',');
+    return new EventSource(`/api/export/progress?type=${type}&ids=${idsParam}`);
   }
 };
 

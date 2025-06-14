@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Res, Sse } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Res, Sse, Get, Query } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -70,7 +70,7 @@ export class ExportController {
     }
   }
 
-  @Post('bulk/progress')
+  @Get('progress')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get export progress' })
   @ApiBody({
@@ -84,9 +84,11 @@ export class ExportController {
   })
   @Sse('progress')
   async getProgress(
-    @Body() body: { type: 'student' | 'teacher'; ids: string[] }
+    @Query('type') type: 'student' | 'teacher',
+    @Query('ids') ids: string
   ): Promise<Observable<{ data: ExportProgress }>> {
-    const { stream, total } = await this.exportService.bulkExport(body.type, body.ids);
+    const idArray = ids.split(',');
+    const { stream, total } = await this.exportService.bulkExport(type, idArray);
     
     return new Observable<{ data: ExportProgress }>(subscriber => {
       stream.on('progress', (progress: ExportProgress) => {

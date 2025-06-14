@@ -159,7 +159,7 @@ export default function TeachersPage() {
 
     try {
       // Start progress tracking
-      const eventSource = exportApi.getExportProgress();
+      const eventSource = exportApi.getExportProgress('teacher', selectedIds);
       eventSource.onmessage = (event) => {
         const progress = JSON.parse(event.data);
         setExportProgress(progress);

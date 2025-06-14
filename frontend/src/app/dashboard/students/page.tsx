@@ -123,7 +123,7 @@ export default function StudentsPage() {
 
     try {
       // Start progress tracking
-      const eventSource = exportApi.getExportProgress();
+      const eventSource = exportApi.getExportProgress('student', selectedRows);
       eventSource.onmessage = (event) => {
         const progress = JSON.parse(event.data);
         setExportProgress(progress);
