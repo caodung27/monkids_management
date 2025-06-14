@@ -27,13 +27,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     this.logger.debug(`Validating JWT payload: ${JSON.stringify(payload)}`);
     
-    const user = await this.usersService.findOne(payload.sub);
-    if (!user) {
-      this.logger.error(`User not found for payload: ${JSON.stringify(payload)}`);
-      throw new UnauthorizedException('User not found');
+    try {
+      const user = await this.usersService.findOne(payload.sub);
+      if (!user) {
+        this.logger.error(`User not found for payload: ${JSON.stringify(payload)}`);
+        throw new UnauthorizedException('User not found');
+      }
+      
+      if (!user.is_active) {
+        this.logger.error(`User is inactive: ${user.email}`);
+        throw new UnauthorizedException('User is inactive');
+      }
+      
+      this.logger.debug(`User validated successfully: ${user.email}`);
+      return user;
+    } catch (error) {
+      this.logger.error(`Error validating user: ${error.message}`);
+      throw error;
     }
-    
-    this.logger.debug(`User validated successfully: ${user.email}`);
-    return user;
   }
 } 

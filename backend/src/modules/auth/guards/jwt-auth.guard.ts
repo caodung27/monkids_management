@@ -18,6 +18,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
+      this.logger.debug('Route is public, skipping authentication');
       return true;
     }
 
@@ -36,14 +37,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw new UnauthorizedException('Invalid authorization header format');
     }
 
+    const token = authHeader.split(' ')[1];
+    this.logger.debug(`Token: ${token}`);
+
     return super.canActivate(context);
   }
 
   handleRequest(err: any, user: any, info: any) {
-    if (err || !user) {
-      this.logger.error(`Authentication failed: ${err?.message || 'User not found'}`);
+    if (err) {
+      this.logger.error(`Authentication error: ${err.message}`);
+      throw new UnauthorizedException(err.message);
+    }
+    if (!user) {
+      this.logger.error('User not found in token');
       throw new UnauthorizedException('Invalid token or token expired');
     }
+    this.logger.debug(`User authenticated successfully: ${user.email}`);
     return user;
   }
 } 

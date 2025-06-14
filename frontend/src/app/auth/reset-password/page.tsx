@@ -68,10 +68,22 @@ export default function ResetPassword() {
       setError(null);
 
       await authApi.updatePassword(values.oldPassword, values.newPassword);
-      router.push('/dashboard');
-    } catch (err) {
+      
+      // Clear form
+      form.reset();
+      
+      // Show success message
+      setError('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
+      
+      // Logout after a short delay
+      setTimeout(async () => {
+        await authApi.logout();
+        router.push('/auth/login');
+      }, 2000);
+      
+    } catch (err: any) {
       Logger.error('Password reset error:', err);
-      setError('Có lỗi xảy ra khi đổi mật khẩu. Vui lòng thử lại.');
+      setError(err?.response?.data?.message || 'Có lỗi xảy ra khi đổi mật khẩu. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -85,7 +97,11 @@ export default function ResetPassword() {
         </Title>
 
         {error && (
-          <Alert icon={<IconAlertCircle size="1rem" />} color="red" mb="md">
+          <Alert 
+            icon={<IconAlertCircle size="1rem" />} 
+            color={error.includes('thành công') ? 'green' : 'red'} 
+            mb="md"
+          >
             {error}
           </Alert>
         )}
