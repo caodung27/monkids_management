@@ -48,7 +48,7 @@ services:
           cpus: '0.5'
           memory: 1G
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/health || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -74,8 +74,7 @@ services:
       - /tmp
     depends_on:
       backend:
-        condition: service_healthy
-        restart: true
+        condition: service_started
     networks:
       - backend-network
     environment:
@@ -96,7 +95,7 @@ services:
           cpus: '0.1'
           memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost/api/health || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
