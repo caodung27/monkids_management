@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Res } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Res, Sse } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -6,7 +6,14 @@ import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { ExportService } from './export.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
-import * as fs from 'fs';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { Readable } from 'stream';
+
+interface ExportProgress {
+  processed: number;
+  total: number;
+}
 
 @ApiTags('export')
 @Controller('export')
@@ -31,29 +38,21 @@ export class ExportController {
     @Res() res: Response
   ) {
     try {
-      const result = await this.exportService.bulkExport(body.type, body.ids);
+      const { stream, total } = await this.exportService.bulkExport(body.type, body.ids);
       
       res.set({
         'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${result.fileName}"`,
+        'Content-Disposition': `attachment; filename="MONKIDS_${body.type === 'student' ? 'Student' : 'Teacher'}_Export.zip"`,
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache',
         'Expires': '0',
+        'X-Total-Items': total.toString(),
       });
 
-      // Create read stream and pipe to response
-      const fileStream = fs.createReadStream(result.filePath);
-      fileStream.pipe(res);
-
-      // Clean up after sending
-      fileStream.on('end', () => {
-        fs.unlink(result.filePath, (err) => {
-          if (err) console.error('Error deleting temporary file:', err);
-        });
-      });
+      stream.pipe(res);
 
       // Handle errors
-      fileStream.on('error', (error) => {
+      stream.on('error', (error) => {
         console.error('Error streaming file:', error);
         if (!res.headersSent) {
           res.status(500).json({ message: 'Error streaming file' });
@@ -69,5 +68,38 @@ export class ExportController {
         });
       }
     }
+  }
+
+  @Post('bulk/progress')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get export progress' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['student', 'teacher'] },
+        ids: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
+  @Sse('progress')
+  async getProgress(
+    @Body() body: { type: 'student' | 'teacher'; ids: string[] }
+  ): Promise<Observable<{ data: ExportProgress }>> {
+    const { stream, total } = await this.exportService.bulkExport(body.type, body.ids);
+    
+    return new Observable<{ data: ExportProgress }>(subscriber => {
+      stream.on('progress', (progress: ExportProgress) => {
+        subscriber.next({ data: progress });
+      });
+
+      stream.on('error', (error) => {
+        subscriber.error(error);
+      });
+
+      stream.on('end', () => {
+        subscriber.complete();
+      });
+    });
   }
 } 

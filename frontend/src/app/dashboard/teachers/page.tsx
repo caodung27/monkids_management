@@ -60,6 +60,7 @@ export default function TeachersPage() {
   // Add state for selected teachers
   const [selectedTeachers, setSelectedTeachers] = useState<Record<string, boolean>>({});
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ processed: number; total: number } | null>(null);
 
   const handleDeleteTeacher = async (id: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa giáo viên này không?')) {
@@ -154,8 +155,26 @@ export default function TeachersPage() {
     }
 
     setExporting(true);
+    setExportProgress(null);
+
     try {
+      // Start progress tracking
+      const eventSource = exportApi.getExportProgress();
+      eventSource.onmessage = (event) => {
+        const progress = JSON.parse(event.data);
+        setExportProgress(progress);
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+      };
+
+      // Start export process
       const data = await exportApi.bulkExport('teacher', selectedIds);
+      
+      // Close event source after export completes
+      eventSource.close();
+
       if (data.success) {
         notifications.show({
           title: 'Thành công',
@@ -174,6 +193,7 @@ export default function TeachersPage() {
       });
     } finally {
       setExporting(false);
+      setExportProgress(null);
     }
   };
 
@@ -206,7 +226,10 @@ export default function TeachersPage() {
               loading={exporting}
               disabled={selectedRows.length === 0}
             >
-              Xuất bảng lương
+              {exportProgress 
+                ? `Đang xuất (${exportProgress.processed}/${exportProgress.total})`
+                : 'Xuất bảng lương'
+              }
             </Button>
           )}
         </Group>

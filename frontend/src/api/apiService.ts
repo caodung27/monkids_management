@@ -441,6 +441,7 @@ export const attendanceApi = {
 export const exportApi = {
   bulkExport: async (type: 'student' | 'teacher', ids: string[]) => {
     try {
+      // First, start the export process
       const response = await axiosInstance.post('/export/bulk', { type, ids }, {
         responseType: 'blob',
         timeout: 30000, // Increase timeout to 30 seconds for large files
@@ -489,6 +490,11 @@ export const exportApi = {
       handleApiError(error);
       throw error;
     }
+  },
+
+  // Add new method to track export progress
+  getExportProgress: () => {
+    return new EventSource('/api/export/progress');
   }
 };
 

@@ -13,6 +13,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import { Readable, PassThrough } from 'stream';
+import { EventEmitter } from 'events';
+
+interface ExportProgress {
+  processed: number;
+  total: number;
+}
 
 @Injectable()
 export class ExportService {
@@ -81,38 +88,10 @@ export class ExportService {
         '--disable-accelerated-video-decode',
         '--disable-gpu-compositing',
         '--disable-logging',
-        '--disable-remote-fonts',
-        '--disable-reading-from-canvas'
       ];
-      options.ignoreDefaultArgs = ['--enable-automation', '--enable-blink-features=IdleDetection'];
-      options.DISPLAY = ':99';
-      options.DISABLE_SETUID_SANDBOX = '1';
-      options.DISABLE_DEV_SHM_USAGE = '1';
-      options.CHROME_PATH = '/usr/bin/google-chrome';
-      options.CHROMIUM_PATH = '/usr/bin/google-chrome';
-      options.pipe = true;
-      options.dumpio = false;
     }
 
-    try {
-      console.log('Launching browser with options:', {
-        executablePath: options.executablePath,
-        env: {
-          DISPLAY: options.DISPLAY,
-          CHROME_PATH: options.CHROME_PATH,
-          CHROMIUM_PATH: options.CHROMIUM_PATH
-        }
-      });
-      this.browser = await puppeteer.launch(options);
-      console.log('Browser launched successfully');
-      
-      // Verify browser version
-      const version = await this.browser.version();
-      console.log('Browser version:', version);
-    } catch (error) {
-      console.error('Failed to launch browser:', error);
-      throw error;
-    }
+    this.browser = await puppeteer.launch(options);
   }
 
   async onModuleDestroy() {
@@ -161,100 +140,97 @@ export class ExportService {
     return fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   }
 
-  async bulkExport(type: 'student' | 'teacher', ids: string[]) {
+  async bulkExport(type: 'student' | 'teacher', ids: string[]): Promise<{ stream: PassThrough; total: number }> {
     const now = new Date();
     const currentMonth = format(now, 'MM');
     const currentYear = format(now, 'yyyy');
     const exportId = uuidv4();
+    let totalItems = 0;
 
     // Create temporary directory for export
     const tempDir = path.join(os.tmpdir(), `monkids_export_${exportId}`);
-    const zipFilePath = path.join(os.tmpdir(), `MONKIDS_T${currentMonth}_${currentYear}_${type === 'student' ? 'HS' : 'GV'}_${exportId}.zip`);
+    await fs.promises.mkdir(tempDir, { recursive: true });
 
-    try {
-      // Create temp directory
-      await fs.promises.mkdir(tempDir, { recursive: true });
+    // Create a pass-through stream for progress tracking
+    const progressEmitter = new EventEmitter();
+    const passThrough = new PassThrough();
 
-      if (type === 'student') {
-        const students = await this.studentRepository.findByIds(ids);
-        if (!students || students.length === 0) {
-          throw new NotFoundException('No students found with the provided IDs');
-        }
-
-        // Process students in batches
-        const batches: Student[][] = [];
-        for (let i = 0; i < students.length; i += this.BATCH_SIZE) {
-          batches.push(students.slice(i, i + this.BATCH_SIZE));
-        }
-
-        for (const batch of batches) {
-          await Promise.all(batch.map(async (student) => {
-            const html = renderStudentReceiptHTML(student, parseInt(currentMonth), parseInt(currentYear));
-            const imageBuffer = await this.generateImage(html);
-            const classroom = student.classroom || 'Other';
-            const classroomDir = path.join(tempDir, classroom);
-            await fs.promises.mkdir(classroomDir, { recursive: true });
-            
-            const fileName = path.join(classroomDir, `${this.sanitizeFileName(student.name || 'Unknown')}_${student.student_id}.png`);
-            await fs.promises.writeFile(fileName, imageBuffer);
-          }));
-        }
-      } else {
-        const teachers = await this.teacherRepository.find({
-          where: { id: In(ids) }
-        });
-        if (!teachers || teachers.length === 0) {
-          throw new NotFoundException('No teachers found with the provided IDs');
-        }
-
-        // Create teacher directory
-        const teacherDir = path.join(tempDir, `GV_Thang${currentMonth}`);
-        await fs.promises.mkdir(teacherDir, { recursive: true });
-
-        // Process teachers in batches
-        const batches: Teacher[][] = [];
-        for (let i = 0; i < teachers.length; i += this.BATCH_SIZE) {
-          batches.push(teachers.slice(i, i + this.BATCH_SIZE));
-        }
-
-        for (const batch of batches) {
-          await Promise.all(batch.map(async (teacher) => {
-            const html = renderTeacherSalaryHTML(teacher, parseInt(currentMonth), parseInt(currentYear));
-            const imageBuffer = await this.generateImage(html);
-            const fileName = path.join(teacherDir, `${this.sanitizeFileName(teacher.name || 'Unknown')}_${teacher.teacher_no}.png`);
-            await fs.promises.writeFile(fileName, imageBuffer);
-          }));
-        }
-      }
-
-      // Create zip file
-      const output = fs.createWriteStream(zipFilePath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
-
-      archive.pipe(output);
-      archive.directory(tempDir, false);
-
-      await new Promise<void>((resolve, reject) => {
-        output.on('close', () => resolve());
-        archive.on('error', reject);
-        archive.finalize();
-      });
-
-      // Return the path to the zip file
-      return {
-        filePath: zipFilePath,
-        fileName: `MONKIDS_T${currentMonth}_${currentYear}_${type === 'student' ? 'HS' : 'GV'}.zip`
-      };
-
-    } catch (error) {
-      // Clean up in case of error
+    // Process data in background
+    (async () => {
       try {
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        archive.pipe(passThrough);
+
+        let processedItems = 0;
+
+        if (type === 'student') {
+          const students = await this.studentRepository.find({
+            where: { sequential_number: In(ids) }
+          });
+          if (!students || students.length === 0) {
+            throw new NotFoundException('No students found with the provided IDs');
+          }
+
+          totalItems = students.length;
+
+          // Process students in batches
+          for (let i = 0; i < students.length; i += this.BATCH_SIZE) {
+            const batch = students.slice(i, i + this.BATCH_SIZE);
+            await Promise.all(batch.map(async (student) => {
+              const html = renderStudentReceiptHTML(student, parseInt(currentMonth), parseInt(currentYear));
+              const imageBuffer = await this.generateImage(html);
+              const classroom = student.classroom || 'Other';
+              const fileName = `${this.sanitizeFileName(student.name || 'Unknown')}_${student.student_id}.png`;
+              
+              archive.append(imageBuffer, { name: `${classroom}/${fileName}` });
+              processedItems++;
+              progressEmitter.emit('progress', { processed: processedItems, total: totalItems });
+            }));
+          }
+        } else {
+          const teachers = await this.teacherRepository.find({
+            where: { id: In(ids) }
+          });
+          if (!teachers || teachers.length === 0) {
+            throw new NotFoundException('No teachers found with the provided IDs');
+          }
+
+          totalItems = teachers.length;
+
+          // Process teachers in batches
+          for (let i = 0; i < teachers.length; i += this.BATCH_SIZE) {
+            const batch = teachers.slice(i, i + this.BATCH_SIZE);
+            await Promise.all(batch.map(async (teacher) => {
+              const html = renderTeacherSalaryHTML(teacher, parseInt(currentMonth), parseInt(currentYear));
+              const imageBuffer = await this.generateImage(html);
+              const fileName = `${this.sanitizeFileName(teacher.name || 'Unknown')}_${teacher.teacher_no}.png`;
+              
+              archive.append(imageBuffer, { name: `GV_Thang${currentMonth}/${fileName}` });
+              processedItems++;
+              progressEmitter.emit('progress', { processed: processedItems, total: totalItems });
+            }));
+          }
+        }
+
+        // Finalize archive
+        await archive.finalize();
+
+        // Clean up temp directory
         await fs.promises.rm(tempDir, { recursive: true, force: true });
-        await fs.promises.rm(zipFilePath, { force: true });
-      } catch (cleanupError) {
-        console.error('Error during cleanup:', cleanupError);
+      } catch (error) {
+        // Clean up in case of error
+        try {
+          await fs.promises.rm(tempDir, { recursive: true, force: true });
+        } catch (cleanupError) {
+          console.error('Error during cleanup:', cleanupError);
+        }
+        passThrough.emit('error', error);
       }
-      throw error;
-    }
+    })();
+
+    return {
+      stream: passThrough,
+      total: totalItems
+    };
   }
 } 

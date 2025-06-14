@@ -35,6 +35,7 @@ export default function StudentsPage() {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ processed: number; total: number } | null>(null);
 
   const handleDeleteStudent = async (sequentialNumber: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa học sinh này không?')) {
@@ -116,9 +117,28 @@ export default function StudentsPage() {
       });
       return;
     }
+
     setExporting(true);
+    setExportProgress(null);
+
     try {
+      // Start progress tracking
+      const eventSource = exportApi.getExportProgress();
+      eventSource.onmessage = (event) => {
+        const progress = JSON.parse(event.data);
+        setExportProgress(progress);
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+      };
+
+      // Start export process
       const data = await exportApi.bulkExport('student', selectedRows);
+      
+      // Close event source after export completes
+      eventSource.close();
+
       if (data.success) {
         notifications.show({
           title: 'Thành công',
@@ -136,6 +156,7 @@ export default function StudentsPage() {
       });
     } finally {
       setExporting(false);
+      setExportProgress(null);
     }
   };
 
@@ -168,7 +189,10 @@ export default function StudentsPage() {
               loading={exporting}
               disabled={selectedRows.length === 0}
             >
-              Xuất biên lai
+              {exportProgress 
+                ? `Đang xuất (${exportProgress.processed}/${exportProgress.total})`
+                : 'Xuất biên lai'
+              }
             </Button>
           )}
         </Group>
