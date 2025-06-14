@@ -18,18 +18,6 @@ const nextConfig = {
     config.resolve.alias.encoding = false;
     return config;
   },
-  
-  async rewrites() {
-    if (process.env.NODE_ENV !== 'production') {
-      return [
-        {
-          source: '/api/:path*',
-          destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/:path*`,
-        }
-      ];
-    }
-    return [];
-  },
   async headers() {
     return [
       {

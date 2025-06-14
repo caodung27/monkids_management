@@ -8,17 +8,6 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
-  const corsLogger = new Logger('CORS');
-
-  // Enable CORS only in development
-  // if (process.env.NODE_ENV !== 'production') {
-  //   app.enableCors({
-  //     origin: ['http://localhost:3000', 'https://www.monkids.site', 'https://monkids.site'],
-  //     credentials: true,
-  //     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  //     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  //   });
-  // }
 
   // Global prefix
   app.setGlobalPrefix('api');
