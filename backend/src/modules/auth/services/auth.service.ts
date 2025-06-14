@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   Inject,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -243,13 +244,13 @@ export class AuthService {
 
     const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid password');
+      throw new BadRequestException('Mật khẩu hiện tại không đúng');
     }
 
     // Check if new password is same as old password
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      throw new UnauthorizedException('Mật khẩu mới không được trùng với mật khẩu hiện tại');
+      throw new BadRequestException('Mật khẩu mới không được trùng với mật khẩu hiện tại');
     }
 
     const salt = await bcrypt.genSalt(this.SALT_ROUNDS);

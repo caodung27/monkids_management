@@ -116,7 +116,7 @@ export default function NewProfilePage() {
         // Check if user is authenticated
         const hasToken = TokenService.hasAnyToken();
         if (!hasToken) {
-          router.push('/login');
+          router.push('/auth/login');
           return;
         }
 

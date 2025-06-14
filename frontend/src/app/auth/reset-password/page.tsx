@@ -75,7 +75,7 @@ export default function ResetPassword() {
       // Show success message
       setError('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
       
-      // Logout after a short delay
+      // Only redirect on success
       setTimeout(async () => {
         await authApi.logout();
         router.push('/auth/login');
@@ -84,6 +84,7 @@ export default function ResetPassword() {
     } catch (err: any) {
       Logger.error('Password reset error:', err);
       setError(err?.response?.data?.message || 'Có lỗi xảy ra khi đổi mật khẩu. Vui lòng thử lại.');
+      // Don't redirect on error, stay on the current page
     } finally {
       setLoading(false);
     }
