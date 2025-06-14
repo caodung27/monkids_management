@@ -13,7 +13,6 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { IconAlertCircle } from '@tabler/icons-react';
 import Logger from '@/libs/logger';
 import { authApi } from '@/api/apiService';

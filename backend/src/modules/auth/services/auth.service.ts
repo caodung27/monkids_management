@@ -246,6 +246,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid password');
     }
 
+    // Check if new password is same as old password
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new UnauthorizedException('Mật khẩu mới không được trùng với mật khẩu hiện tại');
+    }
+
     const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 

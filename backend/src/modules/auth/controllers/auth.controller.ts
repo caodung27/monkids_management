@@ -12,6 +12,7 @@ import {
 import { AuthService } from '../services/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
+import { UpdatePasswordDto } from '../dto/update-password.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import {
   ApiTags,
@@ -69,14 +70,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Update user password' })
   @ApiResponse({ status: 200, description: 'Password updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Invalid password format' })
   async updatePassword(
     @Req() req: RequestWithUser,
-    @Body() body: { oldPassword: string; newPassword: string },
+    @Body() updatePasswordDto: UpdatePasswordDto,
   ) {
     const updatedUser = await this.authService.updatePassword(
       req.user.id,
-      body.oldPassword,
-      body.newPassword,
+      updatePasswordDto.oldPassword,
+      updatePasswordDto.newPassword,
     );
     return { message: 'Password updated successfully', user: updatedUser };
   }
