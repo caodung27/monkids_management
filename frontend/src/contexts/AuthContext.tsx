@@ -228,14 +228,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const initAuth = async () => {
       if (!initComplete.current) {
-        // Skip auth check if on public paths
-        const pathname = window.location.pathname;
-        const isPublicPath = ['/auth/login', '/auth/register']
-          .some(path => pathname.startsWith(path));
-        
-        if (!isPublicPath) {
-          await checkAndRefreshAuth();
-        }
+        await checkAndRefreshAuth();
         initComplete.current = true;
       }
     };
