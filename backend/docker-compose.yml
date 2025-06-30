@@ -21,7 +21,7 @@ services:
       - JWT_REFRESH_SECRET=monkids-jwt-refresh-secret-key-2024
       - JWT_EXPIRATION=1d
       - JWT_REFRESH_EXPIRATION=7d
-      # Google OAuth2 Configuration
+      # Google OAuth2 Configuration (skip)
       - GOOGLE_CLIENT_ID=542269964324-6kmatcq5rp19lefr3eiouu60hkqdg6jk.apps.googleusercontent.com
       - GOOGLE_CLIENT_SECRET=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
       - GOOGLE_CALLBACK_URL=https://api.monkids.site/api/auth/google/callback
@@ -75,6 +75,10 @@ services:
     depends_on:
       backend:
         condition: service_started
+      prometheus:
+        condition: service_started
+      grafana:
+        condition: service_started
     networks:
       - backend-network
     environment:
@@ -100,6 +104,30 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - backend-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    networks:
+      - backend-network
     restart: unless-stopped
 
 networks:
