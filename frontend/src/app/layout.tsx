@@ -4,6 +4,7 @@ import App from './App';
 import { Providers } from './providers';
 import './globals.css';
 import { ColorSchemeScript } from '@mantine/core';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,6 +27,7 @@ export default function RootLayout({
         <Providers>
           <App>{children}</App>
         </Providers>
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -40,30 +40,12 @@ export default function LoginPage() {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
 
-  // Redirect if already authenticated
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Check for tokens
-        const hasToken = TokenService.checkTokensExist();
-        
-        if (hasToken) {
-          // If we have tokens, redirect to dashboard
-          router.replace('/dashboard');
-          return;
-        }
-        
-        // No tokens, allow login
-        setIsChecking(false);
-      } catch (error) {
-        setIsChecking(false);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
+    if (!authLoading && isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   // Form setup
   const form = useForm({
@@ -85,7 +67,7 @@ export default function LoginPage() {
     }
   };
 
-  if (isChecking) {
+  if (authLoading) {
     return (
       <Container size="xs" my="xl">
         <Center mt="xl">
